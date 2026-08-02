@@ -1,0 +1,9 @@
+# KAKA POS — Offline Supermarket & Business Management System
+# All dependencies are self-contained; no external services required.
+Flask==3.0.3
+Werkzeug==3.0.3
+openpyxl==3.1.5
+reportlab==4.2.2
+python-barcode==0.15.1
+qrcode==7.4.2
+Pillow==10.4.0

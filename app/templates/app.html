@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ settings.store_name or 'KAKA POS' }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body data-theme="light">
+  <div id="app-loading" class="app-loading"><div class="spinner"></div></div>
+
+  <div id="app" class="app-shell" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <span class="brand-icon">🛒</span>
+        <span class="brand-name">{{ settings.store_name or 'KAKA POS' }}</span>
+      </div>
+      <nav id="nav" class="nav"></nav>
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <span class="user-avatar" id="user-avatar">A</span>
+          <div>
+            <div class="user-name" id="user-name"></div>
+            <div class="user-role" id="user-role"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn" id="menu-toggle" title="Menu">☰</button>
+        <h2 id="page-title"></h2>
+        <div class="topbar-actions">
+          <select id="lang-select" class="mini-select" title="Language">
+            <option value="en">EN</option><option value="fr">FR</option><option value="ar">ع</option>
+          </select>
+          <button class="icon-btn" id="theme-toggle" title="Theme">🌓</button>
+          <div class="dropdown">
+            <button class="icon-btn" id="user-menu-btn">⚙️</button>
+            <div class="dropdown-menu" id="user-menu">
+              <a data-action="change-password" data-i18n="menu.change_password">Change Password</a>
+              <a data-action="logout" data-i18n="menu.logout">Logout</a>
+            </div>
+          </div>
+        </div>
+      </header>
+      <main id="view" class="view"></main>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root" class="toast-root"></div>
+
+  <script src="{{ url_for('static', filename='i18n/translations.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/views/dashboard.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/views/pos.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/views/products.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/views/inventory.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/views/partners.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/views/purchases.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/views/finance.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/views/reports.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/views/admin.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

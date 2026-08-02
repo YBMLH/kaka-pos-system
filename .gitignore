@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Instance data (database, generated secret key)
+instance/*.db
+instance/*.db-wal
+instance/*.db-shm
+instance/secret.key
+
+# Backups & uploads (runtime-generated)
+backups/*.db
+app/static/uploads/*
+!app/static/uploads/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ settings.store_name or 'KAKA POS' }} — Login</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="login-body" data-theme="light">
+  <div class="login-wrap">
+    <form id="login-form" class="login-card" autocomplete="off">
+      <div class="login-logo">🛒</div>
+      <h1>{{ settings.store_name or 'KAKA POS' }}</h1>
+      <p class="login-sub" data-i18n="login.subtitle">Offline Point of Sale &amp; Business Management</p>
+
+      <div class="lang-switch">
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="fr">FR</button>
+        <button type="button" data-lang="ar">ع</button>
+      </div>
+
+      <label data-i18n="login.username">Username</label>
+      <input type="text" id="username" name="username" required autofocus>
+
+      <label data-i18n="login.password">Password</label>
+      <input type="password" id="password" name="password" required>
+
+      <div id="login-error" class="login-error" hidden></div>
+      <button type="submit" class="btn btn-primary btn-block" data-i18n="login.signin">Sign In</button>
+
+      <p class="login-hint">Default admin — <strong>admin / admin123</strong></p>
+    </form>
+  </div>
+
+  <script src="{{ url_for('static', filename='i18n/translations.js') }}"></script>
+  <script>
+    const t = window.KAKA_I18N;
+    let lang = localStorage.getItem('kaka_lang') || 'en';
+    function applyLang(l){
+      lang = l; localStorage.setItem('kaka_lang', l);
+      document.documentElement.lang = l;
+      document.documentElement.dir = (l === 'ar') ? 'rtl' : 'ltr';
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        const val = t[l] && t[l][key];
+        if (val) el.textContent = val;
+      });
+    }
+    document.querySelectorAll('.lang-switch button').forEach(b =>
+      b.addEventListener('click', () => applyLang(b.dataset.lang)));
+    applyLang(lang);
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = document.getElementById('login-error');
+      err.hidden = true;
+      const res = await fetch('/api/auth/login', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          username: document.getElementById('username').value.trim(),
+          password: document.getElementById('password').value
+        })
+      });
+      if (res.ok) { window.location.href = '/'; }
+      else {
+        const d = await res.json();
+        err.textContent = (t[lang] && t[lang]['login.invalid']) || d.error || 'Invalid credentials';
+        err.hidden = false;
+      }
+    });
+  </script>
+</body>
+</html>
