@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KAKA POS — Standalone</title>
+<!--
+  KAKA POS — Standalone single-file build.
+  Runs 100% in the browser. All data is stored locally in this browser
+  (localStorage) — nothing is sent anywhere. This is the GitHub-Pages /
+  download-and-open build; the full multi-terminal version is the Flask app
+  in the repository root. Default login: admin / admin123
+-->
+<style>
+:root{--bg:#f4f6fb;--surface:#fff;--surface-2:#f8fafc;--border:#e2e8f0;--text:#1e293b;
+--text-muted:#64748b;--primary:#1f6feb;--primary-dark:#1657c4;--success:#16a34a;
+--warning:#d97706;--danger:#dc2626;--sidebar-bg:#0f172a;--sidebar-text:#cbd5e1;
+--shadow:0 1px 3px rgba(0,0,0,.08);--shadow-lg:0 10px 30px rgba(0,0,0,.15);--radius:10px;--radius-sm:6px;}
+[data-theme="dark"]{--bg:#0b1120;--surface:#131c2e;--surface-2:#1a2438;--border:#263449;
+--text:#e2e8f0;--text-muted:#94a3b8;--primary:#3b82f6;--sidebar-bg:#070c17;--sidebar-text:#94a3b8;
+--shadow:0 1px 3px rgba(0,0,0,.4);--shadow-lg:0 10px 30px rgba(0,0,0,.5);}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans Arabic",sans-serif;
+background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+[dir="rtl"] body,[dir="rtl"]{font-family:"Noto Sans Arabic","Segoe UI",Tahoma,sans-serif}
+a{color:var(--primary);text-decoration:none;cursor:pointer}h1,h2,h3,h4{font-weight:600}
+input,select,textarea{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--border);
+border-radius:var(--radius-sm);background:var(--surface);color:var(--text);outline:none;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(31,111,235,.15)}
+label{font-size:13px;color:var(--text-muted)}
+.btn{display:inline-flex;align-items:center;gap:6px;justify-content:center;padding:9px 16px;
+border:1px solid transparent;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;
+background:var(--surface-2);color:var(--text);transition:.15s;width:auto}
+.btn:hover{filter:brightness(.97)}.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}.btn-success{background:var(--success);color:#fff}
+.btn-danger{background:var(--danger);color:#fff}.btn-ghost{background:transparent;border-color:var(--border)}
+.btn-block{width:100%}.btn-sm{padding:5px 10px;font-size:12.5px}.btn-lg{padding:14px 22px;font-size:16px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.login-body{display:flex;align-items:center;justify-content:center;min-height:100vh;
+background:linear-gradient(135deg,#1f6feb 0%,#0f172a 100%)}
+.login-wrap{width:100%;max-width:400px;padding:20px}
+.login-card{background:var(--surface);border-radius:16px;padding:36px 32px;box-shadow:var(--shadow-lg);text-align:center}
+.login-logo{font-size:48px}.login-card h1{margin:8px 0 4px;font-size:22px}
+.login-sub{color:var(--text-muted);margin-bottom:20px;font-size:13px}
+.login-card label{display:block;text-align:start;font-size:13px;font-weight:500;margin:12px 0 4px;color:var(--text-muted)}
+.login-error{background:#fee2e2;color:#b91c1c;padding:8px 12px;border-radius:6px;margin:12px 0;font-size:13px}
+.login-hint{margin-top:16px;font-size:12px;color:var(--text-muted)}
+.lang-switch{display:flex;gap:6px;justify-content:center;margin-bottom:8px}
+.lang-switch button{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;
+padding:4px 12px;cursor:pointer;color:var(--text);width:auto}
+.spinner{width:42px;height:42px;border:4px solid var(--border);border-top-color:var(--primary);
+border-radius:50%;animation:spin .8s linear infinite;margin:80px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.app-shell{display:flex;min-height:100vh}
+.sidebar{width:240px;background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;
+flex-direction:column;position:sticky;top:0;height:100vh;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:10px;padding:18px 20px;font-size:17px;font-weight:700;
+color:#fff;border-bottom:1px solid rgba(255,255,255,.08)}.brand-icon{font-size:22px}
+.nav{flex:1;overflow-y:auto;padding:10px 0}
+.nav a{display:flex;align-items:center;gap:12px;padding:11px 20px;color:var(--sidebar-text);
+font-size:14px;border-inline-start:3px solid transparent}
+.nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav a.active{background:rgba(31,111,235,.18);color:#fff;border-inline-start-color:var(--primary)}
+.nav .nav-icon{font-size:17px;width:22px;text-align:center}
+.sidebar-footer{padding:14px 16px;border-top:1px solid rgba(255,255,255,.08)}
+.user-chip{display:flex;align-items:center;gap:10px}
+.user-avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;
+display:flex;align-items:center;justify-content:center;font-weight:600}
+.user-name{color:#fff;font-size:13px;font-weight:600}.user-role{font-size:11px;color:var(--sidebar-text)}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{display:flex;align-items:center;gap:14px;padding:12px 22px;background:var(--surface);
+border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20}
+.topbar h2{font-size:18px;flex:1}.topbar-actions{display:flex;align-items:center;gap:8px}
+.icon-btn{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;width:38px;
+height:38px;font-size:16px;cursor:pointer;color:var(--text)}.icon-btn:hover{background:var(--border)}
+.mini-select{padding:7px 8px;width:auto}#menu-toggle{display:none}
+.dropdown{position:relative}
+.dropdown-menu{position:absolute;inset-inline-end:0;top:46px;background:var(--surface);
+border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-lg);min-width:180px;padding:6px;display:none;z-index:30}
+.dropdown-menu.open{display:block}.dropdown-menu a{display:block;padding:9px 12px;border-radius:6px;color:var(--text)}
+.dropdown-menu a:hover{background:var(--surface-2)}
+.view{padding:22px;flex:1;overflow-y:auto}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:16px}.stats-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+.stat-label{color:var(--text-muted);font-size:12.5px;text-transform:uppercase;letter-spacing:.04em}
+.stat-value{font-size:26px;font-weight:700;margin-top:6px}.stat-sub{font-size:12.5px;margin-top:4px;color:var(--text-muted)}
+.stat-accent-green{border-inline-start:4px solid var(--success)}.stat-accent-blue{border-inline-start:4px solid var(--primary)}
+.stat-accent-orange{border-inline-start:4px solid var(--warning)}.stat-accent-red{border-inline-start:4px solid var(--danger)}
+.up{color:var(--success)}.down{color:var(--danger)}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap}
+.section-head h3{font-size:16px}.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.toolbar .grow{flex:1;min-width:160px}.spacer{flex:1}
+.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:10px 14px;text-align:start;border-bottom:1px solid var(--border);white-space:nowrap}
+th{background:var(--surface-2);color:var(--text-muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+tbody tr:hover{background:var(--surface-2)}td.num,th.num{text-align:end;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600}
+.badge-green{background:rgba(22,163,74,.15);color:var(--success)}.badge-red{background:rgba(220,38,38,.15);color:var(--danger)}
+.badge-orange{background:rgba(217,119,6,.15);color:var(--warning)}.badge-blue{background:rgba(31,111,235,.15);color:var(--primary)}
+.badge-gray{background:var(--surface-2);color:var(--text-muted)}
+.pos-layout{display:grid;grid-template-columns:1fr 400px;gap:16px;height:calc(100vh - 63px)}
+.pos-left{display:flex;flex-direction:column;gap:12px;min-height:0;padding:16px}
+.pos-search{position:relative}.pos-search input{font-size:16px;padding:14px 16px}
+.pos-suggest{position:absolute;top:54px;inset-inline:0;background:var(--surface);border:1px solid var(--border);
+border-radius:8px;box-shadow:var(--shadow-lg);max-height:320px;overflow-y:auto;z-index:40;display:none}
+.pos-suggest.open{display:block}
+.pos-suggest-item{display:flex;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border)}
+.pos-suggest-item:hover{background:var(--primary);color:#fff}
+.pos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;overflow-y:auto;padding:4px}
+.pos-tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:.12s}
+.pos-tile:hover{border-color:var(--primary);transform:translateY(-2px);box-shadow:var(--shadow)}
+.pos-tile .pt-name{font-weight:600;font-size:13px;height:34px;overflow:hidden}
+.pos-tile .pt-price{color:var(--primary);font-weight:700;margin-top:6px}.pos-tile .pt-stock{font-size:11px;color:var(--text-muted)}
+.cart{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;
+flex-direction:column;height:calc(100vh - 63px - 32px);margin:16px}
+.cart-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.cart-items{flex:1;overflow-y:auto;padding:8px}.cart-empty{text-align:center;color:var(--text-muted);padding:40px 10px}
+.cart-line{display:grid;grid-template-columns:1fr auto;gap:4px;padding:10px;border-bottom:1px solid var(--border)}
+.cart-line .cl-name{font-weight:600;font-size:13px}.cart-line .cl-controls{display:flex;align-items:center;gap:6px;margin-top:4px}
+.qty-btn{width:26px;height:26px;border:1px solid var(--border);background:var(--surface-2);border-radius:6px;cursor:pointer;font-size:15px;color:var(--text)}
+.cart-line input.cl-qty{width:52px;text-align:center;padding:4px}
+.cart-line .cl-total{font-weight:700;text-align:end;align-self:center}.cl-remove{color:var(--danger);cursor:pointer;font-size:16px}
+.cart-foot{border-top:1px solid var(--border);padding:14px 16px}
+.cart-total-row{display:flex;justify-content:space-between;margin:3px 0}
+.cart-total-row.grand{font-size:20px;font-weight:700;margin:8px 0}
+.cart-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px}
+.modal{background:var(--surface);border-radius:12px;box-shadow:var(--shadow-lg);width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column}
+.modal.modal-lg{max-width:820px}
+.modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.modal-head h3{font-size:17px}.modal-body{padding:20px;overflow-y:auto}
+.modal-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+.modal-close{cursor:pointer;font-size:22px;color:var(--text-muted);background:none;border:none;width:auto}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid .full{grid-column:1/-1}
+.field{display:flex;flex-direction:column;gap:5px}
+.toast-root{position:fixed;bottom:20px;inset-inline-end:20px;display:flex;flex-direction:column;gap:10px;z-index:300}
+.toast{background:var(--surface);border:1px solid var(--border);border-inline-start:4px solid var(--primary);
+border-radius:8px;padding:12px 18px;box-shadow:var(--shadow-lg);min-width:240px;animation:slidein .25s ease}
+.toast.success{border-inline-start-color:var(--success)}.toast.error{border-inline-start-color:var(--danger)}
+@keyframes slidein{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
+.chart{display:flex;align-items:flex-end;gap:6px;height:200px;padding:10px 0}
+.chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px}
+.chart-bar{width:70%;background:var(--primary);border-radius:4px 4px 0 0;min-height:2px}
+.chart-bar.profit{background:var(--success)}.chart-label{font-size:10px;color:var(--text-muted);white-space:nowrap}
+.health-dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.health-green{background:var(--success)}.health-orange{background:var(--warning)}.health-red{background:var(--danger)}
+.empty{text-align:center;color:var(--text-muted);padding:40px}.muted{color:var(--text-muted)}.right{text-align:end}
+.mt{margin-top:16px}.mb{margin-bottom:16px}.flex{display:flex;gap:8px;align-items:center}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-wrap:wrap}
+.tab{padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-muted)}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.banner{background:rgba(31,111,235,.1);border:1px solid var(--primary);color:var(--text);
+border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px}
+@media(max-width:900px){.sidebar{position:fixed;inset-inline-start:0;z-index:60;transform:translateX(-100%);transition:transform .25s}
+[dir="rtl"] .sidebar{transform:translateX(100%)}.sidebar.open{transform:none}#menu-toggle{display:block}
+.pos-layout{grid-template-columns:1fr;height:auto}.cart{height:auto;margin:0}.form-grid{grid-template-columns:1fr}}
+@media print{.sidebar,.topbar,.toast-root{display:none}.view{padding:0}}
+</style>
+</head>
+<body data-theme="light">
+<div id="root"></div>
+<div id="modal-root"></div>
+<div id="toast-root" class="toast-root"></div>
+<script>
+"use strict";
+/* ========================================================================
+   KAKA POS — Standalone browser build. Data layer + app in one file.
+   ======================================================================== */
+
+/* ---------- Text normalization (accent/Arabic/typo-tolerant search) ------ */
+var ARABIC_MAP={"أ":"ا","إ":"ا","آ":"ا","ٱ":"ا","ى":"ي","ئ":"ي","ؤ":"و","ة":"ه"};
+var ARABIC_DIAC=/[ؐ-ًؚ-ٰٟۖ-ۭـ]/g;
+function stripAccents(s){return s.normalize("NFKD").replace(/[̀-ͯ]/g,"");}
+function normalize(s){if(!s)return"";s=(""+s).trim().toLowerCase();s=s.replace(ARABIC_DIAC,"");
+  s=s.replace(/[؀-ۿ]/g,function(c){return ARABIC_MAP[c]||c;});s=stripAccents(s);
+  return s.replace(/[^0-9a-z؀-ۿ]+/g,"");}
+function searchBlob(){var out=[],seen={};for(var i=0;i<arguments.length;i++){var n=normalize(arguments[i]);
+  if(n&&!seen[n]){seen[n]=1;out.push(n);}}return out.join(" ");}
+function levenshtein(a,b){if(a===b)return 0;if(!a)return b.length;if(!b)return a.length;
+  var prev=[];for(var j=0;j<=b.length;j++)prev[j]=j;
+  for(var i=0;i<a.length;i++){var cur=[i+1];for(var k=0;k<b.length;k++){
+    cur[k+1]=Math.min(prev[k+1]+1,cur[k]+1,prev[k]+(a[i]!==b[k]?1:0));}prev=cur;}return prev[b.length];}
+
+/* ---------- Local data store (localStorage-backed) ---------------------- */
+var STORE_KEY="kaka_pos_data_v1";
+var ROLE_PERMS={
+  administrator:["*"],
+  manager:["dashboard","pos","products.view","products.edit","inventory","suppliers","customers",
+    "purchases","expenses","reports","register","zakat","settings","edit_price","refund","discount","history"],
+  cashier:["dashboard","pos","products.view","customers","register","discount","refund","history"],
+  inventory:["dashboard","products.view","products.edit","inventory","suppliers","purchases"]
+};
+var ROLE_LABELS={administrator:"Administrator",manager:"Manager",cashier:"Cashier",inventory:"Inventory Employee"};
+
+function hashPw(s){/* demo-grade only — client-side hashing is not real security */
+  var h=5381;for(var i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))|0;}return "h"+(h>>>0).toString(16);}
+
+var DB={
+  data:null,
+  load:function(){try{this.data=JSON.parse(localStorage.getItem(STORE_KEY));}catch(e){this.data=null;}
+    if(!this.data){this.seed();}return this.data;},
+  save:function(){localStorage.setItem(STORE_KEY,JSON.stringify(this.data));},
+  reset:function(){localStorage.removeItem(STORE_KEY);this.data=null;this.seed();},
+  nextId:function(coll){var arr=this.data[coll],m=0;for(var i=0;i<arr.length;i++)if(arr[i].id>m)m=arr[i].id;return m+1;},
+  seed:function(){
+    var now=new Date().toISOString();
+    var cats=["Beverages","Dairy","Bakery","Snacks","Cleaning","Cosmetics","Electronics","Phones","Clothing","Fruits & Vegetables"];
+    var brands=["Coca Cola","Nestle","Samsung","Apple","Nike","Danone","P&G","Generic"];
+    var products=[
+      ["Coca Cola 1L","Coca Cola 1L","كوكا كولا 1 لتر","Beverages","Coca Cola",6,9,20,200,40,"pcs"],
+      ["Mineral Water 1.5L","Eau Minérale 1.5L","ماء معدني 1.5 لتر","Beverages","Generic",2,4,20,300,60,"pcs"],
+      ["Fresh Milk 1L","Lait Frais 1L","حليب طازج 1 لتر","Dairy","Danone",7,11,20,120,30,"pcs"],
+      ["Yogurt Pack x4","Yaourt x4","زبادي 4 حبات","Dairy","Danone",8,13,20,90,20,"pcs"],
+      ["White Bread","Pain Blanc","خبز أبيض","Bakery","Generic",1.5,3,0,80,20,"pcs"],
+      ["Potato Chips 150g","Chips 150g","رقائق البطاطس","Snacks","Generic",5,8.5,20,150,30,"pcs"],
+      ["Dish Soap 500ml","Liquide Vaisselle","سائل غسيل 500مل","Cleaning","P&G",9,15,20,60,15,"pcs"],
+      ["Shampoo 400ml","Shampooing 400ml","شامبو 400مل","Cosmetics","P&G",18,29,20,45,10,"pcs"],
+      ["USB-C Cable 1m","Câble USB-C 1m","كابل USB-C","Electronics","Generic",15,35,20,70,15,"pcs"],
+      ["Wireless Earbuds","Écouteurs sans fil","سماعات لاسلكية","Electronics","Samsung",180,299,20,25,5,"pcs"],
+      ["Samsung Galaxy A15","Samsung Galaxy A15","سامسونج A15","Phones","Samsung",1400,1899,20,12,3,"pcs"],
+      ["Phone Case","Coque Téléphone","غطاء هاتف","Phones","Generic",12,30,20,100,20,"pcs"],
+      ["Cotton T-Shirt","T-Shirt Coton","قميص قطني","Clothing","Nike",45,89,20,60,10,"pcs"],
+      ["Running Shoes","Chaussures Sport","أحذية رياضية","Clothing","Nike",210,349,20,20,5,"pcs"],
+      ["Bananas (kg)","Bananes (kg)","موز","Fruits & Vegetables","Generic",6,10,0,150,30,"kg"],
+      ["Tomatoes (kg)","Tomates (kg)","طماطم","Fruits & Vegetables","Generic",4,7,0,120,25,"kg"]
+    ];
+    var d={settings:{store_name:"KAKA Market",store_address:"",store_phone:"",currency:"MAD",
+      tax_rate:20,zakat_rate:2.5,language:"en",theme:"light",receipt_width:80,
+      receipt_footer:"Thank you for your visit!"},
+      users:[{id:1,username:"admin",full_name:"System Administrator",password:hashPw("admin123"),role:"administrator",active:1,last_login:null},
+             {id:2,username:"cashier",full_name:"Demo Cashier",password:hashPw("cashier123"),role:"cashier",active:1,last_login:null}],
+      categories:[],brands:[],suppliers:[
+        {id:1,company_name:"Atlas Distribution",contact_person:"",category:"Beverages",phone1:"0522110011",whatsapp:"",email:"atlas@example.com",city:"",country:"",tax_number:"",address:"",notes:"",balance:0,active:1},
+        {id:2,company_name:"Nord Food Supply",contact_person:"",category:"Dairy",phone1:"0522220022",whatsapp:"",email:"nord@example.com",city:"",country:"",tax_number:"",address:"",notes:"",balance:0,active:1},
+        {id:3,company_name:"TechnoPro Import",contact_person:"",category:"Electronics",phone1:"0522330033",whatsapp:"",email:"techno@example.com",city:"",country:"",tax_number:"",address:"",notes:"",balance:0,active:1}],
+      customers:[],products:[],sales:[],purchases:[],expenses:[],movements:[],registers:[],
+      activity:[],counters:{sale:0,purchase:0}};
+    cats.forEach(function(c,i){d.categories.push({id:i+1,name:c,name_ar:"",name_fr:""});});
+    brands.forEach(function(b,i){d.brands.push({id:i+1,name:b});});
+    var catId={};d.categories.forEach(function(c){catId[c.name]=c.id;});
+    var brId={};d.brands.forEach(function(b){brId[b.name]=b.id;});
+    products.forEach(function(p,i){
+      var bc="611100000"+(1000+i*7);
+      d.products.push({id:i+1,barcode:bc,sku:"SKU"+(1000+i),name_en:p[0],name_fr:p[1],name_ar:p[2],
+        search_blob:searchBlob(p[0],p[1],p[2],bc),category_id:catId[p[3]],brand_id:brId[p[4]],
+        supplier_id:((i%3)+1),purchase_price:p[5],selling_price:p[6],tax_rate:p[7],quantity:p[8],
+        min_stock:p[9],unit:p[10],expiry_date:"",batch_number:"",notes:"",archived:0,created_at:now});
+    });
+    this.data=d;this.save();
+  }
+};
+
+/* ---------- Session / auth --------------------------------------------- */
+var SESSION={user:null,lang:localStorage.getItem("kaka_lang")||"en",theme:localStorage.getItem("kaka_theme")||"light"};
+function currentPerms(){if(!SESSION.user)return[];return ROLE_PERMS[SESSION.user.role]||[];}
+function can(p){var perms=currentPerms();return perms.indexOf("*")>-1||perms.indexOf(p)>-1;}
+function login(username,password){
+  var u=DB.data.users.filter(function(x){return x.username===username&&x.active;})[0];
+  if(!u||u.password!==hashPw(password))return false;
+  u.last_login=new Date().toISOString();DB.save();
+  SESSION.user=u;log("login","user",u.username+" logged in");return true;}
+function logout(){if(SESSION.user)log("logout","user","");SESSION.user=null;}
+function log(action,entity,detail){DB.data.activity.unshift({id:DB.nextId("activity"),
+  user:SESSION.user?SESSION.user.username:"",action:action,entity:entity||"",detail:detail||"",
+  created_at:new Date().toISOString()});if(DB.data.activity.length>2000)DB.data.activity.length=2000;DB.save();}
+
+/* ---------- Formatting -------------------------------------------------- */
+function money(n){var cur=DB.data.settings.currency||"MAD";
+  return Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+" "+cur;}
+function num(n,d){return Number(n||0).toLocaleString(undefined,{minimumFractionDigits:d||0,maximumFractionDigits:d||0});}
+function fmtDate(iso){if(!iso)return"—";var d=new Date(iso);return d.toLocaleString();}
+function today(){return new Date().toISOString().slice(0,10);}
+function dnorm(iso){return(iso||"").slice(0,10);}
+
+/* ---------- i18n (subset; falls back to English) ----------------------- */
+var I18N={"en":{"login.subtitle":"Offline Point of Sale & Business Management","login.username":"Username","login.password":"Password","login.signin":"Sign In","login.invalid":"Invalid username or password","menu.change_password":"Change Password","menu.logout":"Logout","nav.dashboard":"Dashboard","nav.pos":"Point of Sale","nav.products":"Products","nav.inventory":"Inventory","nav.suppliers":"Suppliers","nav.customers":"Customers","nav.purchases":"Purchases","nav.expenses":"Expenses","nav.reports":"Reports","nav.register":"Cash Register","nav.zakat":"Zakat","nav.users":"Users","nav.settings":"Settings","nav.health":"Business Health","nav.history":"Sales History","common.add":"Add","common.edit":"Edit","common.delete":"Delete","common.save":"Save","common.cancel":"Cancel","common.search":"Search","common.close":"Close","common.actions":"Actions","common.name":"Name","common.phone":"Phone","common.total":"Total","common.export":"Export","common.print":"Print","common.loading":"Loading...","common.confirm":"Confirm","common.yes":"Yes","common.no":"No","common.all":"All","common.status":"Status","common.date":"Date","dash.today_revenue":"Today's Revenue","dash.today_profit":"Today's Profit","dash.month_revenue":"Monthly Revenue","dash.net_profit":"Net Profit","dash.inventory_value":"Inventory Value","dash.expenses":"Expenses","pos.search_placeholder":"Scan barcode or search product...","pos.cart":"Cart","pos.empty_cart":"Cart is empty","pos.subtotal":"Subtotal","pos.discount":"Discount","pos.tax":"Tax","pos.pay":"Charge","pos.hold":"Hold","pos.clear":"Clear","pos.paid":"Paid","pos.change":"Change","prod.barcode":"Barcode","prod.price":"Price","prod.stock":"Stock","prod.category":"Category","prod.cost":"Cost"},"fr":{"login.subtitle":"Point de Vente Hors-ligne & Gestion d'Entreprise","login.username":"Nom d'utilisateur","login.password":"Mot de passe","login.signin":"Se connecter","login.invalid":"Identifiant ou mot de passe invalide","menu.change_password":"Changer le mot de passe","menu.logout":"Déconnexion","nav.dashboard":"Tableau de bord","nav.pos":"Point de Vente","nav.products":"Produits","nav.inventory":"Inventaire","nav.suppliers":"Fournisseurs","nav.customers":"Clients","nav.purchases":"Achats","nav.expenses":"Dépenses","nav.reports":"Rapports","nav.register":"Caisse","nav.zakat":"Zakat","nav.users":"Utilisateurs","nav.settings":"Paramètres","nav.health":"Santé de l'entreprise","nav.history":"Historique des ventes","common.add":"Ajouter","common.edit":"Modifier","common.delete":"Supprimer","common.save":"Enregistrer","common.cancel":"Annuler","common.search":"Rechercher","common.close":"Fermer","common.actions":"Actions","common.name":"Nom","common.phone":"Téléphone","common.total":"Total","common.export":"Exporter","common.print":"Imprimer","common.loading":"Chargement...","common.confirm":"Confirmer","common.yes":"Oui","common.no":"Non","common.all":"Tous","common.status":"Statut","common.date":"Date","dash.today_revenue":"Revenu du jour","dash.today_profit":"Bénéfice du jour","dash.month_revenue":"Revenu mensuel","dash.net_profit":"Bénéfice net","dash.inventory_value":"Valeur du stock","dash.expenses":"Dépenses","pos.search_placeholder":"Scanner un code-barres ou rechercher...","pos.cart":"Panier","pos.empty_cart":"Le panier est vide","pos.subtotal":"Sous-total","pos.discount":"Remise","pos.tax":"Taxe","pos.pay":"Encaisser","pos.hold":"Suspendre","pos.clear":"Vider","pos.paid":"Payé","pos.change":"Monnaie","prod.barcode":"Code-barres","prod.price":"Prix","prod.stock":"Stock","prod.category":"Catégorie","prod.cost":"Coût"},"ar":{"login.subtitle":"نقطة بيع دون اتصال وإدارة الأعمال","login.username":"اسم المستخدم","login.password":"كلمة المرور","login.signin":"تسجيل الدخول","login.invalid":"اسم المستخدم أو كلمة المرور غير صحيحة","menu.change_password":"تغيير كلمة المرور","menu.logout":"تسجيل الخروج","nav.dashboard":"لوحة التحكم","nav.pos":"نقطة البيع","nav.products":"المنتجات","nav.inventory":"المخزون","nav.suppliers":"الموردون","nav.customers":"العملاء","nav.purchases":"المشتريات","nav.expenses":"المصاريف","nav.reports":"التقارير","nav.register":"الصندوق","nav.zakat":"الزكاة","nav.users":"المستخدمون","nav.settings":"الإعدادات","nav.health":"صحة الأعمال","nav.history":"سجل المبيعات","common.add":"إضافة","common.edit":"تعديل","common.delete":"حذف","common.save":"حفظ","common.cancel":"إلغاء","common.search":"بحث","common.close":"إغلاق","common.actions":"إجراءات","common.name":"الاسم","common.phone":"الهاتف","common.total":"المجموع","common.export":"تصدير","common.print":"طباعة","common.loading":"جار التحميل...","common.confirm":"تأكيد","common.yes":"نعم","common.no":"لا","common.all":"الكل","common.status":"الحالة","common.date":"التاريخ","dash.today_revenue":"إيرادات اليوم","dash.today_profit":"ربح اليوم","dash.month_revenue":"الإيرادات الشهرية","dash.net_profit":"صافي الربح","dash.inventory_value":"قيمة المخزون","dash.expenses":"المصاريف","pos.search_placeholder":"امسح الباركود أو ابحث عن منتج...","pos.cart":"السلة","pos.empty_cart":"السلة فارغة","pos.subtotal":"المجموع الفرعي","pos.discount":"الخصم","pos.tax":"الضريبة","pos.pay":"الدفع","pos.hold":"تعليق","pos.clear":"مسح","pos.paid":"المدفوع","pos.change":"الباقي","prod.barcode":"الباركود","prod.price":"السعر","prod.stock":"المخزون","prod.category":"الفئة","prod.cost":"التكلفة"}};
+function t(key){var d=I18N[SESSION.lang]||I18N.en;return d[key]||I18N.en[key]||key;}
+
+/* ---------- DOM helpers ------------------------------------------------- */
+function el(tag,attrs,children){var n=document.createElement(tag);
+  if(attrs)for(var k in attrs){var v=attrs[k];if(v==null||v===false)continue;
+    if(k==="class")n.className=v;else if(k==="html")n.innerHTML=v;else if(k==="text")n.textContent=v;
+    else if(k.slice(0,2)==="on"&&typeof v==="function")n.addEventListener(k.slice(2).toLowerCase(),v);
+    else if(v===true)n.setAttribute(k,"");else n.setAttribute(k,v);}
+  if(children!=null){(Array.isArray(children)?children:[children]).forEach(function(c){
+    if(c==null||c===false)return;n.appendChild(typeof c==="string"?document.createTextNode(c):c);});}
+  return n;}
+function esc(s){var d=document.createElement("div");d.textContent=s==null?"":s;return d.innerHTML;}
+function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
+function toast(msg,type){var r=document.getElementById("toast-root");
+  var e=el("div",{class:"toast "+(type||""),text:msg});r.appendChild(e);
+  setTimeout(function(){e.style.opacity="0";setTimeout(function(){e.remove();},300);},3000);}
+function modal(title,content,buttons,opts){opts=opts||{};
+  var root=document.getElementById("modal-root");var overlay=el("div",{class:"modal-overlay"});
+  var foot=el("div",{class:"modal-foot"});function close(){overlay.remove();}
+  (buttons||[{label:t("common.close"),class:"btn-ghost"}]).forEach(function(b){
+    var btn=el("button",{class:"btn "+(b.class||"btn-ghost"),text:b.label});
+    btn.addEventListener("click",function(){var r=b.onClick?b.onClick():undefined;
+      if(r===false)return;if(!b.keepOpen)close();});foot.appendChild(btn);});
+  var box=el("div",{class:"modal "+(opts.large?"modal-lg":"")},[
+    el("div",{class:"modal-head"},[el("h3",{text:title}),el("button",{class:"modal-close",html:"&times;",onClick:close})]),
+    el("div",{class:"modal-body"},content),foot]);
+  overlay.appendChild(box);overlay.addEventListener("click",function(e){if(e.target===overlay&&!opts.sticky)close();});
+  root.appendChild(overlay);return{close:close};}
+function confirmModal(message,onYes){modal(t("common.confirm"),el("p",{text:message}),[
+  {label:t("common.cancel"),class:"btn-ghost"},{label:t("common.yes"),class:"btn-danger",onClick:onYes}]);}
+function buildForm(fields,initial){initial=initial||{};var grid=el("div",{class:"form-grid"});var inputs={};
+  fields.forEach(function(f){if(f.hidden)return;var wrap=el("div",{class:"field"+(f.full?" full":"")});
+    wrap.appendChild(el("label",{text:f.label}));var input;
+    if(f.type==="select"){input=el("select");(f.options||[]).forEach(function(o){
+        input.appendChild(el("option",{value:o.value},o.label));});
+      input.value=initial[f.name]!=null?initial[f.name]:(f.default||"");}
+    else if(f.type==="textarea"){input=el("textarea",{rows:f.rows||2});input.value=initial[f.name]||"";}
+    else{input=el("input",{type:f.type||"text"});input.value=initial[f.name]!=null?initial[f.name]:(f.default||"");
+      if(f.step)input.step=f.step;if(f.placeholder)input.placeholder=f.placeholder;}
+    inputs[f.name]=input;wrap.appendChild(input);grid.appendChild(wrap);});
+  return{node:grid,inputs:inputs,values:function(){var out={};fields.forEach(function(f){if(!inputs[f.name])return;
+    var v=inputs[f.name].value;if(f.type==="number")v=v===""?0:parseFloat(v);out[f.name]=v;});return out;}};}
+function table(columns,rows,opts){opts=opts||{};
+  var thead=el("tr",{},columns.map(function(c){return el("th",{class:c.num?"num":""},c.label);}));
+  var tbody=el("tbody");if(!rows.length){tbody.appendChild(el("tr",{},el("td",{colspan:columns.length,class:"empty"},opts.empty||"No records")));}
+  rows.forEach(function(r){var tr=el("tr");columns.forEach(function(c){var td=el("td",{class:c.num?"num":""});
+    var val=c.render?c.render(r):r[c.key];if(val instanceof Node)td.appendChild(val);
+    else td.innerHTML=val==null?"":val;tr.appendChild(td);});tbody.appendChild(tr);});
+  return el("div",{class:"table-wrap"},el("table",{},[el("thead",{},thead),tbody]));}
+function badge(text,color){return '<span class="badge badge-'+color+'">'+esc(text)+'</span>';}
+function statCard(label,value,sub,accent){return el("div",{class:"stat stat-accent-"+accent},[
+  el("div",{class:"stat-label",text:label}),el("div",{class:"stat-value",text:value}),el("div",{class:"stat-sub",text:sub||""})]);}
+function barChart(data){var max=1;data.forEach(function(d){max=Math.max(max,d.value,d.value2||0);});
+  return el("div",{class:"chart"},data.map(function(d){var kids=[];
+    if(d.value2!=null)kids.push(el("div",{class:"chart-bar profit",title:money(d.value2),style:"height:"+(d.value2/max*100)+"%"}));
+    kids.push(el("div",{class:"chart-bar",title:d.label+": "+money(d.value),style:"height:"+(d.value/max*100)+"%"}));
+    return el("div",{class:"chart-bar-wrap"},[el("div",{class:"flex",style:"align-items:flex-end;gap:2px;height:100%"},kids),
+      el("div",{class:"chart-label",text:d.label})]);}));}
+function iconAction(icon,title,fn){return el("button",{class:"icon-btn btn-sm",style:"width:32px;height:32px;font-size:14px",title:title,html:icon,onClick:fn});}
+function csvExport(filename,headers,rows){var lines=[headers.join(",")];
+  rows.forEach(function(r){lines.push(r.map(function(c){c=c==null?"":(""+c);
+    return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(","));});
+  var blob=new Blob(["﻿"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);},2000);}
+
+/* ---------- Inventory helper (single source of truth) ------------------ */
+function adjustStock(productId,change,reason,note){
+  var p=DB.data.products.filter(function(x){return x.id===productId;})[0];if(!p)return null;
+  p.quantity=(p.quantity||0)+change;
+  DB.data.movements.unshift({id:DB.nextId("movements"),product_id:productId,product_name:p.name_en,
+    change_qty:change,balance:p.quantity,reason:reason,note:note||"",
+    user:SESSION.user?SESSION.user.username:"",created_at:new Date().toISOString()});
+  return p.quantity;}
+
+/* ---------- Product search --------------------------------------------- */
+function searchProducts(term,limit){limit=limit||15;term=(term||"").trim();if(!term)return{products:[]};
+  var exact=DB.data.products.filter(function(p){return p.barcode===term&&!p.archived;})[0];
+  if(exact)return{products:[exact],exact_barcode:true};
+  var norm=normalize(term);
+  var rows=DB.data.products.filter(function(p){if(p.archived)return false;
+    return(p.search_blob||"").indexOf(norm)>-1||(p.sku||"").toLowerCase().indexOf(term.toLowerCase())>-1||(p.barcode||"").indexOf(term)>-1;});
+  rows.sort(function(a,b){function sc(r){var blob=r.search_blob||"";if(blob.indexOf(norm)===0)return 0;
+    var best=99;blob.split(" ").forEach(function(tok){best=Math.min(best,levenshtein(norm,tok));});return 1+best/100;}
+    return sc(a)-sc(b);});
+  return{products:rows.slice(0,limit)};}
+function serializeProduct(p){var d={};for(var k in p)d[k]=p[k];var sp=p.selling_price||0,pp=p.purchase_price||0;
+  d.profit_margin=sp?Math.round((sp-pp)/sp*10000)/100:0;d.profit_unit=Math.round((sp-pp)*100)/100;
+  d.low_stock=(p.quantity||0)<=(p.min_stock||0);
+  var c=DB.data.categories.filter(function(x){return x.id===p.category_id;})[0];d.category_name=c?c.name:"";
+  return d;}
+
+/* ---------- Date/period analytics -------------------------------------- */
+function completedSales(){return DB.data.sales.filter(function(s){return s.status==="completed"||s.status==="partial_refund";});}
+function inPeriod(iso,period){var d=new Date(iso);var now=new Date();
+  var dd=dnorm(iso);var td=today();
+  if(period==="today")return dd===td;
+  if(period==="yesterday"){var y=new Date();y.setDate(y.getDate()-1);return dd===y.toISOString().slice(0,10);}
+  if(period==="week"){var monday=new Date();var day=(monday.getDay()+6)%7;monday.setDate(monday.getDate()-day);
+    monday.setHours(0,0,0,0);return d>=monday;}
+  if(period==="month")return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
+  if(period==="quarter")return d.getFullYear()===now.getFullYear()&&Math.floor(d.getMonth()/3)===Math.floor(now.getMonth()/3);
+  if(period==="half")return d.getFullYear()===now.getFullYear()&&Math.floor(d.getMonth()/6)===Math.floor(now.getMonth()/6);
+  if(period==="year")return d.getFullYear()===now.getFullYear();
+  return true;}
+function salesMetrics(filterFn){var m={orders:0,revenue:0,cost:0,gross_profit:0,tax:0,discount:0};
+  completedSales().forEach(function(s){if(filterFn&&!filterFn(s))return;m.orders++;m.revenue+=s.total;
+    m.cost+=s.cost_total;m.gross_profit+=s.profit;m.tax+=s.tax;m.discount+=s.discount;});
+  ["revenue","cost","gross_profit","tax","discount"].forEach(function(k){m[k]=Math.round(m[k]*100)/100;});return m;}
+function expenseTotal(filterFn){var t=0;DB.data.expenses.forEach(function(e){if(filterFn&&!filterFn(e))return;t+=e.amount;});return Math.round(t*100)/100;}
+function inventoryValue(){var cost=0,retail=0,units=0,count=0;
+  DB.data.products.forEach(function(p){if(p.archived)return;count++;units+=p.quantity;
+    cost+=p.quantity*p.purchase_price;retail+=p.quantity*p.selling_price;});
+  return{cost_value:Math.round(cost*100)/100,retail_value:Math.round(retail*100)/100,total_units:units,products:count};}
+
+/* ======================================================================
+   VIEWS
+   ====================================================================== */
+var VIEWS={};
+
+/* ---- Dashboard ---- */
+VIEWS.dashboard={title:function(){return t("nav.dashboard");},render:function(root){
+  clear(root);
+  var periods=["today","week","month","quarter","half","year"];
+  var plabels={today:"Today",week:"This Week",month:"This Month",quarter:"This Quarter",half:"Half Year",year:"This Year"};
+  var sum={};periods.forEach(function(p){var m=salesMetrics(function(s){return inPeriod(s.created_at,p);});
+    m.expenses=expenseTotal(function(e){return inPeriod(e.spent_on,p);});m.net_profit=Math.round((m.gross_profit-m.expenses)*100)/100;sum[p]=m;});
+  var inv=inventoryValue();
+  root.appendChild(el("div",{class:"grid stats-grid"},[
+    statCard(t("dash.today_revenue"),money(sum.today.revenue),sum.today.orders+" orders","blue"),
+    statCard(t("dash.today_profit"),money(sum.today.gross_profit),"Gross","green"),
+    statCard(t("dash.month_revenue"),money(sum.month.revenue),sum.month.orders+" orders","blue"),
+    statCard(t("dash.net_profit"),money(sum.month.net_profit),"This month","green"),
+    statCard(t("dash.inventory_value"),money(inv.cost_value),inv.products+" products","orange"),
+    statCard(t("dash.expenses"),money(sum.month.expenses),"This month","red")]));
+  // income by period
+  root.appendChild(el("div",{class:"card mt"},[el("div",{class:"section-head"},el("h3",{text:"Income by Period"})),
+    table([{key:"period",label:"Period"},{key:"revenue",label:"Revenue",num:true,render:function(r){return money(r.revenue);}},
+      {key:"profit",label:"Gross Profit",num:true,render:function(r){return money(r.profit);}},
+      {key:"expenses",label:"Expenses",num:true,render:function(r){return money(r.expenses);}},
+      {key:"net",label:"Net Profit",num:true,render:function(r){return '<strong class="'+(r.net>=0?"up":"down")+'">'+money(r.net)+"</strong>";}}],
+      periods.map(function(p){return{period:plabels[p],revenue:sum[p].revenue,profit:sum[p].gross_profit,expenses:sum[p].expenses,net:sum[p].net_profit};}))]));
+  // 30-day chart
+  var byDay={};completedSales().forEach(function(s){var d=dnorm(s.created_at);byDay[d]=byDay[d]||{r:0,p:0};byDay[d].r+=s.total;byDay[d].p+=s.profit;});
+  var series=[];for(var i=29;i>=0;i--){var dt=new Date();dt.setDate(dt.getDate()-i);var key=dt.toISOString().slice(0,10);
+    var v=byDay[key]||{r:0,p:0};series.push({label:key.slice(5),value:Math.round(v.r*100)/100,value2:Math.round(v.p*100)/100});}
+  var chartCard=el("div",{class:"card mt"},[el("div",{class:"section-head"},el("h3",{text:"Revenue & Profit (last 30 days)"}))]);
+  var hasData=series.some(function(s){return s.value>0;});
+  chartCard.appendChild(hasData?barChart(series):el("div",{class:"empty",text:"No sales yet — make a sale in the POS"}));
+  root.appendChild(chartCard);
+  // comparisons + health
+  function growth(a,b){if(b===0)return a>0?100:0;return Math.round((a-b)/b*10000)/100;}
+  function cmp(cur,prev){return{cur:cur,growth:growth(cur.revenue,prev.revenue),diff:Math.round((cur.revenue-prev.revenue)*100)/100};}
+  var yst=salesMetrics(function(s){return inPeriod(s.created_at,"yesterday");});
+  var comparisons=[["Today vs Yesterday",cmp(sum.today,yst)]];
+  var bottom=el("div",{class:"grid mt",style:"grid-template-columns:1fr 1fr"});
+  bottom.appendChild(el("div",{class:"card"},[el("h3",{class:"mb",text:"Comparison — Today vs Yesterday"}),
+    table([{key:"m",label:"Metric"},{key:"today",label:"Today",num:true},{key:"yst",label:"Yesterday",num:true},{key:"g",label:"Growth",num:true}],
+      [{m:"Revenue",today:money(sum.today.revenue),yst:money(yst.revenue),g:growthBadge(growth(sum.today.revenue,yst.revenue))},
+       {m:"Profit",today:money(sum.today.gross_profit),yst:money(yst.gross_profit),g:growthBadge(growth(sum.today.gross_profit,yst.gross_profit))},
+       {m:"Orders",today:sum.today.orders,yst:yst.orders,g:growthBadge(growth(sum.today.orders,yst.orders))}])]));
+  // health
+  var net=sum.month.net_profit;var margin=sum.month.revenue?net/sum.month.revenue*100:0;
+  var low=DB.data.products.filter(function(p){return!p.archived&&p.min_stock>0&&p.quantity<=p.min_stock;}).length;
+  function lightC(v,g,w){return v>=g?"green":(v>=w?"orange":"red");}
+  var indicators=[["Net profit this month",net,lightC(net,1,0),true],["Net margin %",Math.round(margin*10)/10,lightC(margin,15,5),false],
+    ["Products at/below min",low,low===0?"green":(low<15?"orange":"red"),false]];
+  var overall=indicators.some(function(i){return i[2]==="red";})?"red":(indicators.some(function(i){return i[2]==="orange";})?"orange":"green");
+  var debt=0;DB.data.suppliers.forEach(function(s){if(s.balance>0)debt+=s.balance;});
+  var health=el("div",{class:"card"},[el("div",{class:"section-head"},[el("h3",{text:t("nav.health")}),
+    el("span",{class:"badge badge-"+overall,text:overall.toUpperCase()})])]);
+  indicators.forEach(function(i){health.appendChild(el("div",{class:"flex",style:"justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"},
+    [el("div",{class:"flex"},[el("span",{class:"health-dot health-"+i[2]}),el("span",{text:i[0]})]),
+     el("strong",{text:i[3]?money(i[1]):num(i[1],1)})]));});
+  health.appendChild(el("div",{class:"flex mt",style:"justify-content:space-between"},[el("span",{class:"muted",text:"Net worth estimate"}),
+    el("strong",{text:money(Math.round((inv.cost_value+net-debt)*100)/100)})]));
+  bottom.appendChild(health);root.appendChild(bottom);
+  // top products
+  var byProd={};completedSales().forEach(function(s){if(!inPeriod(s.created_at,"month"))return;
+    s.items.forEach(function(it){byProd[it.name]=byProd[it.name]||{qty:0,rev:0};byProd[it.name].qty+=it.quantity;byProd[it.name].rev+=it.line_total;});});
+  var topP=Object.keys(byProd).map(function(k){return{name:k,qty:byProd[k].qty,revenue:byProd[k].rev};}).sort(function(a,b){return b.qty-a.qty;}).slice(0,10);
+  root.appendChild(el("div",{class:"card mt"},[el("h3",{class:"mb",text:"Top Products (this month)"}),
+    table([{key:"name",label:"Product"},{key:"qty",label:"Qty",num:true,render:function(r){return num(r.qty);}},
+      {key:"revenue",label:"Revenue",num:true,render:function(r){return money(r.revenue);}}],topP,{empty:"No sales this month"})]));
+}};
+function growthBadge(g){return '<span class="'+(g>=0?"up":"down")+'">'+(g>=0?"▲":"▼")+" "+Math.abs(g)+"%</span>";}
+
+/* ---- POS ---- */
+VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
+  clear(root);var state={cart:[],discount:0,customer_id:null};
+  var searchInput=el("input",{type:"text",placeholder:t("pos.search_placeholder"),id:"pos-search",autocomplete:"off"});
+  var suggest=el("div",{class:"pos-suggest"});var grid=el("div",{class:"pos-grid"});
+  var left=el("div",{class:"pos-left"},[el("div",{class:"pos-search"},[searchInput,suggest]),grid]);
+  var cartItems=el("div",{class:"cart-items"});var totalsBox=el("div",{});
+  var cart=el("div",{class:"cart"},[el("div",{class:"cart-head"},[el("h3",{text:t("pos.cart")}),
+    el("button",{class:"btn btn-sm btn-ghost",text:t("pos.hold"),onClick:holdSale})]),cartItems,el("div",{class:"cart-foot"},[totalsBox])]);
+  root.appendChild(el("div",{class:"pos-layout"},[left,cart]));
+  loadTiles();renderCart();searchInput.focus();
+  function loadTiles(){clear(grid);DB.data.products.filter(function(p){return!p.archived;}).slice(0,24).forEach(function(p){
+    grid.appendChild(el("div",{class:"pos-tile",onClick:function(){addToCart(p);}},[el("div",{class:"pt-name",text:p.name_en||p.name_ar}),
+      el("div",{class:"pt-price",text:money(p.selling_price)}),el("div",{class:"pt-stock",text:t("prod.stock")+": "+num(p.quantity)})]));});}
+  var timer,activeIdx=-1,results=[];
+  searchInput.addEventListener("input",function(){clearTimeout(timer);var q=searchInput.value.trim();
+    if(!q){suggest.classList.remove("open");return;}timer=setTimeout(function(){doSearch(q);},100);});
+  searchInput.addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();
+    if(activeIdx>=0&&results[activeIdx]){addToCart(results[activeIdx]);resetSearch();}else doSearch(searchInput.value.trim(),true);}
+    else if(e.key==="ArrowDown"){activeIdx=Math.min(activeIdx+1,results.length-1);hl();}
+    else if(e.key==="ArrowUp"){activeIdx=Math.max(activeIdx-1,0);hl();}else if(e.key==="Escape")resetSearch();});
+  function hl(){var items=suggest.querySelectorAll(".pos-suggest-item");for(var i=0;i<items.length;i++)items[i].style.background=i===activeIdx?"var(--primary)":"";}
+  function doSearch(q,autoAdd){if(!q)return;var d=searchProducts(q);results=d.products;activeIdx=-1;
+    if(d.exact_barcode&&autoAdd!==false){addToCart(d.products[0]);resetSearch();return;}
+    clear(suggest);if(!d.products.length)suggest.appendChild(el("div",{class:"pos-suggest-item",text:"No match"}));
+    d.products.forEach(function(p){suggest.appendChild(el("div",{class:"pos-suggest-item",onClick:function(){addToCart(p);resetSearch();}},
+      [el("div",{},[el("div",{style:"font-weight:600",text:p.name_en||p.name_ar}),
+        el("div",{class:"muted",style:"font-size:12px",text:(p.barcode||"")+" · "+t("prod.stock")+": "+num(p.quantity)})]),
+       el("strong",{text:money(p.selling_price)})]));});suggest.classList.add("open");}
+  function resetSearch(){searchInput.value="";suggest.classList.remove("open");results=[];activeIdx=-1;searchInput.focus();}
+  function addToCart(p){if(p.quantity<=0){toast("Out of stock: "+(p.name_en||p.name_ar),"error");return;}
+    var line=state.cart.filter(function(l){return l.product_id===p.id;})[0];
+    if(line){if(line.quantity+1>p.quantity){toast("Not enough stock","error");return;}line.quantity++;}
+    else state.cart.push({product_id:p.id,name:p.name_en||p.name_ar,unit_price:p.selling_price,
+      purchase_price:p.purchase_price,tax_rate:p.tax_rate,quantity:1,stock:p.quantity,discount:0});renderCart();}
+  function renderCart(){clear(cartItems);if(!state.cart.length)cartItems.appendChild(el("div",{class:"cart-empty",text:t("pos.empty_cart")}));
+    state.cart.forEach(function(l,idx){var lineTotal=l.unit_price*l.quantity-l.discount;
+      var qtyInp=el("input",{class:"cl-qty",type:"number",value:l.quantity,step:"any"});
+      qtyInp.addEventListener("change",function(){var v=parseFloat(qtyInp.value)||0;if(v>l.stock){v=l.stock;toast("Max stock: "+l.stock,"error");}
+        if(v<=0)state.cart.splice(idx,1);else l.quantity=v;renderCart();});
+      var priceCtrl;if(can("edit_price")){priceCtrl=el("input",{class:"cl-qty",type:"number",value:l.unit_price,step:"0.01",style:"width:70px"});
+        priceCtrl.addEventListener("change",function(){l.unit_price=parseFloat(priceCtrl.value)||0;renderCart();});}
+      else priceCtrl=el("span",{class:"muted",style:"font-size:12px",text:"× "+money(l.unit_price)});
+      cartItems.appendChild(el("div",{class:"cart-line"},[el("div",{},[el("div",{class:"cl-name",text:l.name}),
+        el("div",{class:"cl-controls"},[el("button",{class:"qty-btn",text:"−",onClick:function(){chg(idx,-1);}}),qtyInp,
+          el("button",{class:"qty-btn",text:"+",onClick:function(){chg(idx,1);}}),priceCtrl])]),
+        el("div",{},[el("div",{class:"cl-total",text:money(lineTotal)}),el("div",{class:"cl-remove right",html:"🗑",onClick:function(){state.cart.splice(idx,1);renderCart();}})])]));});
+    renderTotals();}
+  function chg(idx,delta){var l=state.cart[idx];if(l.quantity+delta>l.stock){toast("Not enough stock","error");return;}
+    l.quantity+=delta;if(l.quantity<=0)state.cart.splice(idx,1);renderCart();}
+  function totals(){var subtotal=0,tax=0,cost=0;state.cart.forEach(function(l){var g=l.unit_price*l.quantity-l.discount;
+    subtotal+=g;tax+=g*(l.tax_rate||0)/100;cost+=l.purchase_price*l.quantity;});
+    return{subtotal:subtotal,tax:tax,cost:cost,total:subtotal-state.discount+tax,profit:subtotal-state.discount-cost};}
+  function renderTotals(){var tot=totals();clear(totalsBox);
+    totalsBox.appendChild(row(t("pos.subtotal"),money(tot.subtotal)));
+    var discField=el("input",{type:"number",value:state.discount,step:"0.01",style:"width:90px;text-align:end"});
+    discField.addEventListener("change",function(){state.discount=parseFloat(discField.value)||0;renderTotals();});
+    totalsBox.appendChild(el("div",{class:"cart-total-row"},[el("span",{text:t("pos.discount")}),can("discount")?discField:el("span",{text:money(state.discount)})]));
+    totalsBox.appendChild(row(t("pos.tax"),money(tot.tax)));
+    totalsBox.appendChild(el("div",{class:"cart-total-row grand"},[el("span",{text:t("common.total")}),el("span",{text:money(tot.total)})]));
+    totalsBox.appendChild(el("div",{class:"cart-actions"},[
+      el("button",{class:"btn btn-ghost",text:t("pos.clear"),onClick:function(){if(state.cart.length)confirmModal("Clear the cart?",function(){state.cart=[];state.discount=0;renderCart();});}}),
+      el("button",{class:"btn btn-success btn-lg",text:t("pos.pay")+" · "+money(tot.total),onClick:function(){openPayment(tot);}})]));}
+  function row(l,r){return el("div",{class:"cart-total-row"},[el("span",{text:l}),el("span",{text:r})]);}
+  function holdSale(){if(!state.cart.length)return;DB.data._held=DB.data._held||[];
+    DB.data._held.push({id:Date.now(),label:"Sale "+new Date().toLocaleTimeString(),cart:state.cart.slice(),discount:state.discount});DB.save();
+    state.cart=[];state.discount=0;renderCart();toast("Sale held","success");}
+  function openPayment(tot){if(!state.cart.length){toast(t("pos.empty_cart"),"error");return;}
+    var paidInput=el("input",{type:"number",step:"0.01",value:tot.total.toFixed(2),style:"font-size:20px"});
+    var changeEl=el("div",{class:"stat-value",text:money(0)});
+    var methodSel=el("select",{},[el("option",{value:"cash"},"Cash"),el("option",{value:"card"},"Card"),
+      el("option",{value:"transfer"},"Bank Transfer"),el("option",{value:"credit"},"Credit (Customer)")]);
+    paidInput.addEventListener("input",function(){changeEl.textContent=money(Math.max((parseFloat(paidInput.value)||0)-tot.total,0));});
+    var body=el("div",{},[el("div",{class:"stat",style:"text-align:center;margin-bottom:16px"},[el("div",{class:"stat-label",text:t("common.total")}),
+      el("div",{class:"stat-value",text:money(tot.total)})]),
+      el("div",{class:"field"},[el("label",{text:"Payment Method"}),methodSel]),
+      el("div",{class:"field mt"},[el("label",{text:t("pos.paid")}),paidInput]),
+      el("div",{class:"flex mt",style:"justify-content:space-between"},[el("span",{class:"muted",text:t("pos.change")}),changeEl])]);
+    modal(t("pos.pay"),body,[{label:t("common.cancel"),class:"btn-ghost"},
+      {label:t("pos.pay"),class:"btn-success",onClick:function(){return checkout(tot,methodSel.value,parseFloat(paidInput.value)||0);}}]);
+    setTimeout(function(){paidInput.select();},50);}
+  function checkout(tot,method,paid){
+    // validate stock
+    for(var i=0;i<state.cart.length;i++){var l=state.cart[i];var p=DB.data.products.filter(function(x){return x.id===l.product_id;})[0];
+      if(!p||l.quantity>p.quantity){toast("Insufficient stock: "+l.name,"error");return false;}}
+    DB.data.counters.sale++;var rc="R"+today().replace(/-/g,"")+"-"+("0000"+DB.data.counters.sale).slice(-4);
+    var items=state.cart.map(function(l){var g=l.unit_price*l.quantity-l.discount;
+      return{product_id:l.product_id,name:l.name,quantity:l.quantity,unit_price:l.unit_price,
+        purchase_price:l.purchase_price,discount:l.discount,tax_rate:l.tax_rate,
+        line_total:Math.round((g+g*l.tax_rate/100)*100)/100,refunded_qty:0};});
+    var sale={id:DB.nextId("sales"),receipt_no:rc,user:SESSION.user.username,customer_id:state.customer_id,
+      subtotal:Math.round(tot.subtotal*100)/100,discount:state.discount,tax:Math.round(tot.tax*100)/100,
+      total:Math.round(tot.total*100)/100,cost_total:Math.round(tot.cost*100)/100,profit:Math.round(tot.profit*100)/100,
+      paid:paid,change_due:Math.round(Math.max(paid-tot.total,0)*100)/100,payment_method:method,
+      status:"completed",items:items,created_at:new Date().toISOString()};
+    DB.data.sales.unshift(sale);
+    state.cart.forEach(function(l){adjustStock(l.product_id,-l.quantity,"sale",rc);});
+    if(state.customer_id){var c=DB.data.customers.filter(function(x){return x.id===state.customer_id;})[0];
+      if(c){if(method==="credit")c.credit+=(tot.total-paid);c.loyalty_pts+=Math.floor(tot.total);}}
+    DB.save();log("sale","sale",rc+" total="+sale.total);
+    toast("Sale "+rc+" completed · change "+money(sale.change_due),"success");
+    state.cart=[];state.discount=0;renderCart();loadTiles();searchInput.focus();
+    printReceipt(sale);}
+}};
+function printReceipt(sale){var st=DB.data.settings;var w=window.open("","_blank","width=400,height=600");
+  if(!w){toast("Allow pop-ups to print receipts","error");return;}
+  var width=st.receipt_width==58?"58mm":"80mm";
+  var rows=sale.items.map(function(it){return '<tr><td>'+esc(it.name)+'<br><span style="color:#666">'+it.quantity+" x "+it.unit_price.toFixed(2)+
+    '</span></td><td style="text-align:right">'+it.line_total.toFixed(2)+"</td></tr>";}).join("");
+  var cust=sale.customer_id?(DB.data.customers.filter(function(c){return c.id===sale.customer_id;})[0]||{}).name:"";
+  w.document.write('<html><head><title>'+esc(sale.receipt_no)+'</title><style>@page{size:'+width+' auto;margin:2mm}'+
+    'body{width:'+width+';font-family:monospace;font-size:11px;padding:4px}h2{text-align:center;margin:2px 0}'+
+    'table{width:100%;border-collapse:collapse}td{padding:2px 0;vertical-align:top}'+
+    '.sep{border-top:1px dashed #000;margin:4px 0}.tot{font-weight:bold;font-size:14px}.c{text-align:center}</style></head><body>'+
+    '<h2>'+esc(st.store_name)+'</h2>'+(st.store_address?'<div class="c">'+esc(st.store_address)+"</div>":"")+
+    (st.store_phone?'<div class="c">Tel: '+esc(st.store_phone)+"</div>":"")+'<div class="sep"></div>'+
+    "<div>Receipt: "+esc(sale.receipt_no)+"</div><div>Date: "+fmtDate(sale.created_at)+"</div>"+
+    "<div>Cashier: "+esc(sale.user)+"</div>"+(cust?"<div>Customer: "+esc(cust)+"</div>":"")+'<div class="sep"></div>'+
+    "<table>"+rows+"</table><div class='sep'></div><table>"+
+    "<tr><td>Subtotal</td><td style='text-align:right'>"+sale.subtotal.toFixed(2)+"</td></tr>"+
+    (sale.discount?"<tr><td>Discount</td><td style='text-align:right'>-"+sale.discount.toFixed(2)+"</td></tr>":"")+
+    "<tr><td>Tax</td><td style='text-align:right'>"+sale.tax.toFixed(2)+"</td></tr>"+
+    "<tr class='tot'><td>TOTAL</td><td style='text-align:right'>"+sale.total.toFixed(2)+" "+st.currency+"</td></tr>"+
+    "<tr><td>Paid</td><td style='text-align:right'>"+sale.paid.toFixed(2)+"</td></tr>"+
+    "<tr><td>Change</td><td style='text-align:right'>"+sale.change_due.toFixed(2)+"</td></tr></table>"+
+    '<div class="sep"></div><div class="c">'+esc(st.receipt_footer||"Thank you!")+"</div>"+
+    "<script>window.onload=function(){window.print();}<\/script></body></html>");w.document.close();}
+
+/* ---- Products ---- */
+VIEWS.products={title:function(){return t("nav.products");},render:function(root){
+  clear(root);var state={q:"",category_id:"",archived:0,low:false};
+  var search=el("input",{class:"grow",placeholder:t("common.search")+" (name / barcode / SKU)"});
+  var catFilter=el("select",{style:"width:auto"},[el("option",{value:""},t("common.all")+" "+t("prod.category"))].concat(
+    DB.data.categories.map(function(c){return el("option",{value:c.id},c.name);})));
+  var archFilter=el("select",{style:"width:auto"},[el("option",{value:"0"},"Active"),el("option",{value:"1"},"Archived")]);
+  var listHolder=el("div",{});
+  root.appendChild(el("div",{class:"toolbar"},[search,catFilter,archFilter,
+    el("button",{class:"btn btn-ghost btn-sm",text:"⚠ Low stock",onClick:function(){state.low=!state.low;load();}}),
+    el("span",{class:"spacer"}),
+    can("products.edit")?el("button",{class:"btn btn-ghost btn-sm",text:"🏷 Categories",onClick:manageCategories}):null,
+    can("products.edit")?el("button",{class:"btn btn-ghost btn-sm",text:"⬇ Export CSV",onClick:exportCsv}):null,
+    can("products.edit")?el("button",{class:"btn btn-primary",text:"+ "+t("common.add"),onClick:function(){editModal(null);}}):null]));
+  root.appendChild(listHolder);
+  var timer;search.addEventListener("input",function(){clearTimeout(timer);timer=setTimeout(function(){state.q=search.value.trim();load();},150);});
+  catFilter.addEventListener("change",function(){state.category_id=catFilter.value;load();});
+  archFilter.addEventListener("change",function(){state.archived=parseInt(archFilter.value);load();});
+  load();
+  function filtered(){var norm=normalize(state.q);
+    return DB.data.products.filter(function(p){if((p.archived?1:0)!==state.archived)return false;
+      if(state.category_id&&p.category_id!=state.category_id)return false;
+      if(state.low&&!(p.quantity<=p.min_stock))return false;
+      if(state.q&&(p.search_blob||"").indexOf(norm)<0&&(p.barcode||"").indexOf(state.q)<0&&(p.sku||"").toLowerCase().indexOf(state.q.toLowerCase())<0)return false;
+      return true;}).map(serializeProduct);}
+  function load(){var rows=filtered();clear(listHolder);
+    listHolder.appendChild(table([
+      {key:"name",label:t("common.name"),render:function(r){return "<strong>"+esc(r.name_en||r.name_ar)+"</strong><br><span class='muted' style='font-size:12px'>"+esc(r.barcode||"")+(r.sku?" · "+esc(r.sku):"")+"</span>";}},
+      {key:"category_name",label:t("prod.category"),render:function(r){return r.category_name||"—";}},
+      {key:"purchase_price",label:t("prod.cost"),num:true,render:function(r){return money(r.purchase_price);}},
+      {key:"selling_price",label:t("prod.price"),num:true,render:function(r){return money(r.selling_price);}},
+      {key:"margin",label:"Margin",num:true,render:function(r){return r.profit_margin+"%";}},
+      {key:"quantity",label:t("prod.stock"),num:true,render:function(r){return "<span class='"+(r.low_stock?"down":"")+"'>"+num(r.quantity)+" "+esc(r.unit)+"</span>";}},
+      {key:"act",label:"",num:true,render:function(r){var w=el("div",{class:"flex",style:"justify-content:flex-end"});
+        if(can("products.edit")){w.appendChild(iconAction("✏️","Edit",function(){editModal(r);}));
+          w.appendChild(iconAction("📋","Duplicate",function(){dup(r);}));
+          w.appendChild(iconAction("📜","History",function(){historyModal(r);}));
+          if(r.archived)w.appendChild(iconAction("♻️","Restore",function(){setArch(r.id,0);}));
+          else w.appendChild(iconAction("🗑","Archive",function(){confirmModal("Archive '"+(r.name_en||r.name_ar)+"'?",function(){setArch(r.id,1);});}));}
+        return w;}}],rows,{empty:"No products"}));}
+  function setArch(id,v){DB.data.products.filter(function(p){return p.id===id;})[0].archived=v;DB.save();log(v?"archive_product":"restore_product","product",id);load();}
+  function dup(r){var p=DB.data.products.filter(function(x){return x.id===r.id;})[0];var copy=JSON.parse(JSON.stringify(p));
+    copy.id=DB.nextId("products");copy.name_en=(copy.name_en||"")+" (copy)";copy.barcode="";copy.sku=(copy.sku||"")+"-C";copy.quantity=0;
+    copy.search_blob=searchBlob(copy.name_en,copy.name_ar,copy.name_fr);DB.data.products.push(copy);DB.save();toast("Duplicated","success");load();}
+  function editModal(r){var form=buildForm([
+    {name:"name_en",label:"Name (English)"},{name:"name_fr",label:"Nom (Français)"},{name:"name_ar",label:"الاسم (العربية)"},
+    {name:"barcode",label:t("prod.barcode")},{name:"sku",label:"SKU"},
+    {name:"category_id",label:t("prod.category"),type:"select",options:[{value:"",label:"—"}].concat(DB.data.categories.map(function(c){return{value:c.id,label:c.name};}))},
+    {name:"brand_id",label:"Brand",type:"select",options:[{value:"",label:"—"}].concat(DB.data.brands.map(function(b){return{value:b.id,label:b.name};}))},
+    {name:"supplier_id",label:"Supplier",type:"select",options:[{value:"",label:"—"}].concat(DB.data.suppliers.map(function(s){return{value:s.id,label:s.company_name};}))},
+    {name:"purchase_price",label:t("prod.cost"),type:"number",step:"0.01"},{name:"selling_price",label:t("prod.price"),type:"number",step:"0.01"},
+    {name:"tax_rate",label:"Tax %",type:"number",step:"0.01"},{name:"quantity",label:"Quantity",type:"number",step:"any"},
+    {name:"min_stock",label:"Min Stock",type:"number",step:"any"},{name:"unit",label:"Unit",default:"pcs"},
+    {name:"expiry_date",label:"Expiry Date",type:"date"},{name:"batch_number",label:"Batch Number"},
+    {name:"notes",label:"Notes",type:"textarea",full:true}],r||{});
+    modal(r?t("common.edit"):t("common.add"),form.node,[{label:t("common.cancel"),class:"btn-ghost"},
+      {label:t("common.save"),class:"btn-primary",onClick:function(){var v=form.values();
+        if(!(v.name_en||v.name_ar||v.name_fr)){toast("A product name is required","error");return false;}
+        ["category_id","brand_id","supplier_id"].forEach(function(k){v[k]=v[k]?parseInt(v[k]):null;});
+        if(v.barcode){var dupbc=DB.data.products.filter(function(p){return p.barcode===v.barcode&&(!r||p.id!==r.id);})[0];
+          if(dupbc){toast("Barcode already exists","error");return false;}}
+        v.search_blob=searchBlob(v.name_en,v.name_ar,v.name_fr,v.sku,v.barcode);
+        if(r){var p=DB.data.products.filter(function(x){return x.id===r.id;})[0];var oldQ=p.quantity;
+          for(var k in v)p[k]=v[k];if(v.quantity!==oldQ)adjustStock(r.id,v.quantity-oldQ,"adjustment","Manual edit");
+          log("update_product","product",r.id);}
+        else{v.id=DB.nextId("products");v.archived=0;v.created_at=new Date().toISOString();DB.data.products.push(v);
+          if(v.quantity)adjustStock(v.id,v.quantity,"initial","Initial stock");log("create_product","product",v.id);}
+        DB.save();toast("Saved","success");load();}}],{large:true});}
+  function historyModal(r){var mv=DB.data.movements.filter(function(m){return m.product_id===r.id;}).slice(0,200);
+    modal("History · "+(r.name_en||r.name_ar),table([{key:"created_at",label:t("common.date"),render:function(x){return fmtDate(x.created_at);}},
+      {key:"reason",label:"Reason"},{key:"change_qty",label:"Change",num:true,render:function(x){return(x.change_qty>0?"+":"")+num(x.change_qty,2);}},
+      {key:"balance",label:"Balance",num:true,render:function(x){return num(x.balance,2);}},{key:"note",label:"Note"}],mv,{empty:"No movements"}),null,{large:true});}
+  function exportCsv(){var rows=filtered().map(function(p){return[p.barcode,p.sku,p.name_en,p.name_ar,p.name_fr,p.category_name,
+    p.purchase_price,p.selling_price,p.tax_rate,p.quantity,p.min_stock,p.unit];});
+    csvExport("products.csv",["barcode","sku","name_en","name_ar","name_fr","category","purchase_price","selling_price","tax_rate","quantity","min_stock","unit"],rows);}
+  function manageCategories(){var list=el("div",{});function refresh(){clear(list);DB.data.categories.forEach(function(c){
+    var count=DB.data.products.filter(function(p){return p.category_id===c.id;}).length;
+    list.appendChild(el("div",{class:"flex",style:"justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"},
+      [el("span",{text:c.name+" ("+count+")"}),el("button",{class:"btn btn-sm btn-danger",text:"×",onClick:function(){
+        confirmModal("Delete category?",function(){DB.data.products.forEach(function(p){if(p.category_id===c.id)p.category_id=null;});
+          DB.data.categories=DB.data.categories.filter(function(x){return x.id!==c.id;});DB.save();refresh();});}})]));});}
+    refresh();var name=el("input",{placeholder:"New category name"});
+    modal("Categories",el("div",{},[list,el("div",{class:"flex mt"},[name,el("button",{class:"btn btn-primary",text:t("common.add"),onClick:function(){
+      if(!name.value.trim())return;DB.data.categories.push({id:DB.nextId("categories"),name:name.value.trim(),name_ar:"",name_fr:""});DB.save();name.value="";refresh();}})])]));}
+}};
+
+/* ---- Inventory ---- */
+VIEWS.inventory={title:function(){return t("nav.inventory");},render:function(root){
+  clear(root);var val=inventoryValue();
+  root.appendChild(el("div",{class:"grid stats-grid mb"},[statCard("Inventory (cost)",money(val.cost_value),val.products+" products","blue"),
+    statCard("Inventory (retail)",money(val.retail_value),num(val.total_units)+" units","green"),
+    statCard("Potential profit",money(val.retail_value-val.cost_value),"","orange")]));
+  var active="alerts";var body=el("div",{});
+  var tabBar=el("div",{class:"tabs"},[tab("alerts","Alerts"),tab("adjust","Adjust Stock"),tab("movements","Movements"),tab("count","Count Session")]);
+  root.appendChild(tabBar);root.appendChild(body);
+  function tab(id,label){return el("div",{class:"tab"+(id===active?" active":""),text:label,onClick:function(e){active=id;
+    var ts=tabBar.querySelectorAll(".tab");for(var i=0;i<ts.length;i++)ts[i].classList.remove("active");e.target.classList.add("active");draw();}});}
+  draw();
+  function draw(){clear(body);if(active==="alerts")alerts();else if(active==="adjust")adjust();else if(active==="movements")moves();else count();}
+  function alerts(){var low=DB.data.products.filter(function(p){return!p.archived&&p.min_stock>0&&p.quantity<=p.min_stock;});
+    var out=DB.data.products.filter(function(p){return!p.archived&&p.quantity<=0;});
+    var exp=DB.data.products.filter(function(p){return!p.archived&&p.expiry_date&&dnorm(p.expiry_date)<=new Date(Date.now()+30*864e5).toISOString().slice(0,10);});
+    body.appendChild(el("div",{class:"card mb"},[el("h3",{class:"mb",text:"⚠ Low Stock ("+low.length+")"}),
+      table([{key:"name_en",label:t("common.name")},{key:"barcode",label:t("prod.barcode")},
+        {key:"quantity",label:t("prod.stock"),num:true,render:function(r){return num(r.quantity);}},
+        {key:"min_stock",label:"Min",num:true,render:function(r){return num(r.min_stock);}}],low,{empty:"All good"})]));
+    body.appendChild(el("div",{class:"card mb"},[el("h3",{class:"mb",text:"⛔ Out of Stock ("+out.length+")"}),
+      table([{key:"name_en",label:t("common.name")},{key:"barcode",label:t("prod.barcode")}],out,{empty:"None"})]));
+    body.appendChild(el("div",{class:"card"},[el("h3",{class:"mb",text:"📅 Expiring within 30 days ("+exp.length+")"}),
+      table([{key:"name_en",label:t("common.name")},{key:"expiry_date",label:"Expiry"},{key:"quantity",label:t("prod.stock"),num:true,render:function(r){return num(r.quantity);}}],exp,{empty:"None"})]));}
+  function adjust(){var search=el("input",{class:"grow",placeholder:"Search product to adjust..."});var results=el("div",{});
+    body.appendChild(el("div",{class:"card"},[el("div",{class:"toolbar"},[search]),results]));var timer;
+    search.addEventListener("input",function(){clearTimeout(timer);timer=setTimeout(function(){if(!search.value.trim()){clear(results);return;}
+      var d=searchProducts(search.value.trim());clear(results);results.appendChild(table([{key:"name_en",label:t("common.name")},
+        {key:"quantity",label:t("prod.stock"),num:true,render:function(r){return num(r.quantity);}},
+        {key:"act",label:"",num:true,render:function(r){return el("button",{class:"btn btn-sm btn-primary",text:"Adjust",onClick:function(){adjustModal(r);}});}}],d.products,{empty:"No match"}));},150);});}
+  function adjustModal(p){var reason=el("select",{},["adjustment","damage","loss","expired","transfer"].map(function(r){return el("option",{value:r},r);}));
+    var mode=el("select",{},[el("option",{value:"change"},"Add / Remove (±)"),el("option",{value:"set"},"Set exact quantity")]);
+    var qty=el("input",{type:"number",step:"any",value:0});var note=el("input",{placeholder:"Note (optional)"});
+    modal("Adjust Stock",el("div",{},[el("p",{class:"mb",html:"<strong>"+esc(p.name_en)+"</strong> — current: "+num(p.quantity)}),
+      el("div",{class:"field"},[el("label",{text:"Reason"}),reason]),el("div",{class:"field mt"},[el("label",{text:"Mode"}),mode]),
+      el("div",{class:"field mt"},[el("label",{text:"Quantity"}),qty]),el("div",{class:"field mt"},[el("label",{text:"Note"}),note])]),
+      [{label:t("common.cancel"),class:"btn-ghost"},{label:t("common.save"),class:"btn-primary",onClick:function(){
+        var prod=DB.data.products.filter(function(x){return x.id===p.id;})[0];var v=parseFloat(qty.value)||0;
+        var change=mode.value==="set"?v-prod.quantity:v;adjustStock(p.id,change,reason.value,note.value);DB.save();
+        log("inventory_adjust","product",reason.value+" "+change);toast("Adjusted","success");draw();}}]);}
+  function moves(){body.appendChild(el("div",{class:"card"},[el("h3",{class:"mb",text:"Recent Movements"}),
+    table([{key:"created_at",label:t("common.date"),render:function(r){return fmtDate(r.created_at);}},{key:"product_name",label:t("common.name")},
+      {key:"reason",label:"Reason",render:function(r){return badge(r.reason,"blue");}},
+      {key:"change_qty",label:"Change",num:true,render:function(r){return(r.change_qty>0?"+":"")+num(r.change_qty,2);}},
+      {key:"balance",label:"Balance",num:true,render:function(r){return num(r.balance,2);}},{key:"user",label:"By"}],DB.data.movements.slice(0,300),{empty:"No movements"})]));}
+  function count(){var counts={};var prods=DB.data.products.filter(function(p){return!p.archived;});
+    var rows=prods.map(function(p){var i=el("input",{type:"number",step:"any",value:p.quantity,style:"width:90px"});
+      counts[p.id]=p.quantity;i.addEventListener("change",function(){counts[p.id]=parseFloat(i.value)||0;});return{p:p,i:i};});
+    body.appendChild(el("div",{class:"card"},[el("div",{class:"section-head"},[el("h3",{text:"Physical Count"}),
+      el("button",{class:"btn btn-primary",text:"Reconcile",onClick:function(){var n=0;prods.forEach(function(p){var diff=counts[p.id]-p.quantity;
+        if(diff!==0){adjustStock(p.id,diff,"count","Physical count reconciliation");n++;}});DB.save();log("inventory_count","",n+" reconciled");toast("Reconciled "+n+" products","success");draw();}})]),
+      table([{key:"name",label:t("common.name"),render:function(r){return r.p.name_en;}},
+        {key:"sys",label:"System Qty",num:true,render:function(r){return num(r.p.quantity);}},
+        {key:"cnt",label:"Counted",num:true,render:function(r){return r.i;}}],rows)]));}
+}};
+
+/* ---- Suppliers & Customers ---- */
+VIEWS.suppliers={title:function(){return t("nav.suppliers");},render:function(root){
+  clear(root);var search=el("input",{class:"grow",placeholder:t("common.search")});var holder=el("div",{});
+  root.appendChild(el("div",{class:"toolbar"},[search,el("span",{class:"spacer"}),
+    can("suppliers")?el("button",{class:"btn btn-primary",text:"+ "+t("common.add"),onClick:function(){editModal(null);}}):null]));
+  root.appendChild(holder);var timer;search.addEventListener("input",function(){clearTimeout(timer);timer=setTimeout(load,150);});load();
+  function load(){var q=search.value.trim().toLowerCase();var rows=DB.data.suppliers.filter(function(s){return s.active&&
+    (!q||s.company_name.toLowerCase().indexOf(q)>-1||(s.phone1||"").indexOf(q)>-1);});clear(holder);
+    holder.appendChild(table([{key:"company_name",label:"Company",render:function(r){return "<strong>"+esc(r.company_name)+"</strong><br><span class='muted'>"+esc(r.contact_person||"")+"</span>";}},
+      {key:"phone1",label:t("common.phone")},{key:"category",label:"Category"},
+      {key:"balance",label:"We Owe",num:true,render:function(r){return "<span class='"+(r.balance>0?"down":"")+"'>"+money(r.balance)+"</span>";}},
+      {key:"act",label:"",num:true,render:function(r){var w=el("div",{class:"flex",style:"justify-content:flex-end"});
+        if(can("suppliers")){w.appendChild(iconAction("✏️","Edit",function(){editModal(r);}));
+          w.appendChild(iconAction("💵","Pay",function(){payModal(r);}));
+          w.appendChild(iconAction("🗑","Delete",function(){confirmModal("Delete supplier?",function(){r.active=0;DB.save();load();});}));}return w;}}],rows,{empty:"No suppliers"}));}
+  function payModal(r){var amount=el("input",{type:"number",step:"0.01",placeholder:"Amount"});
+    modal("Record Payment · "+r.company_name,el("div",{},[el("p",{class:"mb",text:"Outstanding: "+money(r.balance)}),
+      el("div",{class:"field"},[el("label",{text:"Amount"}),amount])]),[{label:t("common.cancel"),class:"btn-ghost"},
+      {label:"Save",class:"btn-primary",onClick:function(){var a=parseFloat(amount.value)||0;if(a<=0)return false;r.balance-=a;DB.save();log("supplier_payment","supplier","amount="+a);toast("Payment recorded","success");load();}}]);}
+  function editModal(r){var form=buildForm([{name:"company_name",label:"Company Name",full:true},{name:"contact_person",label:"Contact Person"},
+    {name:"category",label:"Category",type:"select",options:["Beverages","Dairy","Frozen Foods","Bakery","Meat","Vegetables","Fruits","Cleaning Products","Cosmetics","Electronics","Packaging","Miscellaneous"].map(function(c){return{value:c,label:c};})},
+    {name:"phone1",label:"Phone 1"},{name:"phone2",label:"Phone 2"},{name:"whatsapp",label:"WhatsApp"},{name:"email",label:"Email"},
+    {name:"website",label:"Website"},{name:"tax_number",label:"Tax Number"},{name:"address",label:"Address",full:true},
+    {name:"city",label:"City"},{name:"country",label:"Country"},{name:"notes",label:"Notes",type:"textarea",full:true}],r||{});
+    modal(r?t("common.edit"):t("common.add"),form.node,[{label:t("common.cancel"),class:"btn-ghost"},
+      {label:t("common.save"),class:"btn-primary",onClick:function(){var v=form.values();if(!v.company_name){toast("Company name required","error");return false;}
+        if(r){for(var k in v)r[k]=v[k];}else{v.id=DB.nextId("suppliers");v.balance=0;v.active=1;DB.data.suppliers.push(v);}
+        DB.save();toast("Saved","success");load();}}],{large:true});}
+}};
+VIEWS.customers={title:function(){return t("nav.customers");},render:function(root){
+  clear(root);var search=el("input",{class:"grow",placeholder:t("common.search")});var holder=el("div",{});
+  root.appendChild(el("div",{class:"toolbar"},[search,el("span",{class:"spacer"}),
+    el("button",{class:"btn btn-primary",text:"+ "+t("common.add"),onClick:function(){editModal(null);}})]));
+  root.appendChild(holder);var timer;search.addEventListener("input",function(){clearTimeout(timer);timer=setTimeout(load,150);});load();
+  function load(){var q=search.value.trim().toLowerCase();var rows=DB.data.customers.filter(function(c){return c.active!==0&&
+    (!q||c.name.toLowerCase().indexOf(q)>-1||(c.phone||"").indexOf(q)>-1);});clear(holder);
+    holder.appendChild(table([{key:"name",label:t("common.name"),render:function(r){return "<strong>"+esc(r.name)+"</strong>";}},
+      {key:"phone",label:t("common.phone")},{key:"city",label:"City"},
+      {key:"loyalty_pts",label:"Loyalty",num:true,render:function(r){return num(r.loyalty_pts);}},
+      {key:"credit",label:"Credit",num:true,render:function(r){return "<span class='"+(r.credit>0?"down":"")+"'>"+money(r.credit)+"</span>";}},
+      {key:"act",label:"",num:true,render:function(r){var w=el("div",{class:"flex",style:"justify-content:flex-end"});
+        w.appendChild(iconAction("👁","View",function(){viewModal(r);}));w.appendChild(iconAction("✏️","Edit",function(){editModal(r);}));
+        if(r.credit>0)w.appendChild(iconAction("💵","Settle",function(){settleModal(r);}));return w;}}],rows,{empty:"No customers"}));}
+  function viewModal(r){var sales=DB.data.sales.filter(function(s){return s.customer_id===r.id;});
+    var spent=0,orders=0;sales.forEach(function(s){if(s.status==="completed"){spent+=s.total;orders++;}});
+    modal(r.name,el("div",{},[el("div",{class:"grid stats-grid mb"},[statCard("Orders",num(orders),"","blue"),
+      statCard("Total Spent",money(spent),"","green"),statCard("Loyalty",num(r.loyalty_pts),"points","orange")]),
+      table([{key:"receipt_no",label:"Receipt"},{key:"total",label:"Total",num:true,render:function(x){return money(x.total);}},
+        {key:"payment_method",label:"Method"},{key:"created_at",label:"Date",render:function(x){return fmtDate(x.created_at);}}],sales.slice(0,50),{empty:"No purchases"})]),null,{large:true});}
+  function settleModal(r){var amount=el("input",{type:"number",step:"0.01",value:r.credit});
+    modal("Settle Credit · "+r.name,el("div",{class:"field"},[el("label",{text:"Amount"}),amount]),[{label:t("common.cancel"),class:"btn-ghost"},
+      {label:"Settle",class:"btn-primary",onClick:function(){r.credit=Math.max(r.credit-(parseFloat(amount.value)||0),0);DB.save();toast("Settled","success");load();}}]);}
+  function editModal(r){var form=buildForm([{name:"name",label:t("common.name"),full:true},{name:"phone",label:t("common.phone")},
+    {name:"city",label:"City"},{name:"address",label:"Address",full:true},{name:"notes",label:"Notes",type:"textarea",full:true}],r||{});
+    modal(r?t("common.edit"):t("common.add"),form.node,[{label:t("common.cancel"),class:"btn-ghost"},
+      {label:t("common.save"),class:"btn-primary",onClick:function(){var v=form.values();if(!v.name){toast("Name required","error");return false;}
+        if(r){for(var k in v)r[k]=v[k];}else{v.id=DB.nextId("customers");v.loyalty_pts=0;v.credit=0;v.active=1;DB.data.customers.push(v);}
+        DB.save();toast("Saved","success");load();}}],{large:true});}
+}};
+
+/* ---- Purchases ---- */
+VIEWS.purchases={title:function(){return t("nav.purchases");},render:function(root){
+  clear(root);var active="orders";var body=el("div",{});
+  var tabBar=el("div",{class:"tabs"},[tab("orders","Purchase Orders"),tab("reorder","🔄 Auto Reorder")]);
+  root.appendChild(tabBar);root.appendChild(body);
+  function tab(id,label){return el("div",{class:"tab"+(id===active?" active":""),text:label,onClick:function(e){active=id;
+    var ts=tabBar.querySelectorAll(".tab");for(var i=0;i<ts.length;i++)ts[i].classList.remove("active");e.target.classList.add("active");draw();}});}
+  draw();function draw(){clear(body);if(active==="orders")orders();else reorder();}
+  function supName(id){var s=DB.data.suppliers.filter(function(x){return x.id===id;})[0];return s?s.company_name:"—";}
+  function orders(){body.appendChild(el("div",{class:"toolbar"},[el("span",{class:"spacer"}),
+    can("purchases")?el("button",{class:"btn btn-primary",text:"+ New Order",onClick:newOrder}):null]));
+    body.appendChild(table([{key:"reference",label:"Reference"},{key:"supplier",label:"Supplier",render:function(r){return supName(r.supplier_id);}},
+      {key:"total",label:"Total",num:true,render:function(r){return money(r.total);}},
+      {key:"status",label:"Status",render:function(r){return badge(r.status,statusColor(r.status));}},
+      {key:"created_at",label:"Date",render:function(r){return fmtDate(r.created_at);}},
+      {key:"act",label:"",num:true,render:function(r){var w=el("div",{class:"flex",style:"justify-content:flex-end"});
+        w.appendChild(iconAction("👁","View",function(){viewOrder(r);}));
+        if(can("purchases")&&r.status!=="received"&&r.status!=="cancelled")w.appendChild(el("button",{class:"btn btn-sm btn-success",text:"Receive",onClick:function(){receiveOrder(r);}}));return w;}}],
+      DB.data.purchases,{empty:"No purchase orders"}));}
+  function viewOrder(r){modal(r.reference,table([{key:"name",label:"Product"},{key:"quantity",label:"Ordered",num:true,render:function(x){return num(x.quantity);}},
+    {key:"received_qty",label:"Received",num:true,render:function(x){return num(x.received_qty);}},
+    {key:"cost",label:"Cost",num:true,render:function(x){return money(x.cost);}},
+    {key:"line_total",label:"Total",num:true,render:function(x){return money(x.line_total);}}],r.items),null,{large:true});}
+  function receiveOrder(r){var inputs={};var rows=r.items.map(function(it){var out=it.quantity-it.received_qty;
+    var i=el("input",{type:"number",step:"any",value:out,style:"width:90px"});inputs[it.id]=i;return{it:it,i:i,out:out};});
+    modal("Receive · "+r.reference,table([{key:"name",label:"Product",render:function(x){return x.it.name;}},
+      {key:"out",label:"Outstanding",num:true,render:function(x){return num(x.out);}},
+      {key:"recv",label:"Receive Now",num:true,render:function(x){return x.i;}}],rows),[{label:t("common.cancel"),class:"btn-ghost"},
+      {label:"Confirm Receiving",class:"btn-success",onClick:function(){r.items.forEach(function(it){var recv=Math.min(Math.max(parseFloat(inputs[it.id].value)||0,0),it.quantity-it.received_qty);
+        if(recv>0){it.received_qty+=recv;if(it.product_id){adjustStock(it.product_id,recv,"purchase",r.reference);
+          var p=DB.data.products.filter(function(x){return x.id===it.product_id;})[0];if(p)p.purchase_price=it.cost;}}});
+        var remaining=r.items.reduce(function(s,it){return s+(it.quantity-it.received_qty);},0);
+        r.status=remaining<=0?"received":"partial";var sup=DB.data.suppliers.filter(function(x){return x.id===r.supplier_id;})[0];
+        if(sup)sup.balance+=(r.total-(r.paid||0));DB.save();log("receive_purchase","purchase",r.reference);toast("Received ("+r.status+")","success");draw();}}],{large:true});}
+  function newOrder(){var items=[];var supSel=el("select",{},[el("option",{value:""},"— Supplier —")].concat(DB.data.suppliers.map(function(s){return el("option",{value:s.id},s.company_name);})));
+    var invoice=el("input",{placeholder:"Invoice number"});var itemsBox=el("div",{});var search=el("input",{placeholder:"Search product to add..."});var timer;
+    search.addEventListener("input",function(){clearTimeout(timer);timer=setTimeout(function(){if(!search.value.trim())return;
+      var d=searchProducts(search.value.trim());if(d.products[0]){addItem(d.products[0]);search.value="";}},200);});
+    function addItem(p){if(items.filter(function(i){return i.product_id===p.id;})[0])return;
+      items.push({product_id:p.id,name:p.name_en||p.name_ar,quantity:1,cost:p.purchase_price});renderItems();}
+    function renderItems(){clear(itemsBox);itemsBox.appendChild(table([{key:"name",label:"Product"},
+      {key:"quantity",label:"Qty",num:true,render:function(it){var i=el("input",{type:"number",step:"any",value:it.quantity,style:"width:80px"});i.addEventListener("change",function(){it.quantity=parseFloat(i.value)||0;});return i;}},
+      {key:"cost",label:"Cost",num:true,render:function(it){var i=el("input",{type:"number",step:"0.01",value:it.cost,style:"width:90px"});i.addEventListener("change",function(){it.cost=parseFloat(i.value)||0;});return i;}},
+      {key:"x",label:"",num:true,render:function(it){return el("button",{class:"btn btn-sm btn-danger",text:"×",onClick:function(){items.splice(items.indexOf(it),1);renderItems();}});}}],items,{empty:"Add products above"}));}
+    renderItems();modal("New Purchase Order",el("div",{},[el("div",{class:"form-grid mb"},[el("div",{class:"field"},[el("label",{text:"Supplier"}),supSel]),
+      el("div",{class:"field"},[el("label",{text:"Invoice"}),invoice])]),el("div",{class:"field mb"},[el("label",{text:"Add product"}),search]),itemsBox]),
+      [{label:t("common.cancel"),class:"btn-ghost"},{label:"Save as Draft",class:"btn-ghost",onClick:function(){return save("draft");}},
+       {label:"Create Order",class:"btn-primary",onClick:function(){return save("ordered");}}],{large:true});
+    function save(status){if(!items.length){toast("Add at least one product","error");return false;}
+      DB.data.counters.purchase++;var ref="PO"+today().replace(/-/g,"")+"-"+("0000"+DB.data.counters.purchase).slice(-4);
+      var subtotal=items.reduce(function(s,i){return s+i.quantity*i.cost;},0);
+      DB.data.purchases.unshift({id:DB.nextId("purchases"),reference:ref,supplier_id:supSel.value?parseInt(supSel.value):null,
+        invoice_number:invoice.value,total:Math.round(subtotal*100)/100,paid:0,status:status,created_at:new Date().toISOString(),
+        items:items.map(function(i){return{id:Math.random().toString(36).slice(2),product_id:i.product_id,name:i.name,quantity:i.quantity,received_qty:0,cost:i.cost,line_total:Math.round(i.quantity*i.cost*100)/100};})});
+      DB.save();log("create_purchase","purchase",ref);toast("Order created","success");draw();}}
+  function reorder(){var groups=reorderGroups();body.appendChild(el("div",{class:"toolbar"},[el("p",{class:"muted",text:"Products at or below minimum stock, grouped by supplier."}),
+    el("span",{class:"spacer"}),can("purchases")&&groups.length?el("button",{class:"btn btn-primary",text:"⚡ Generate Draft Orders",onClick:function(){
+      groups.forEach(function(g){if(!g.supplier_id)return;DB.data.counters.purchase++;var ref="PO"+today().replace(/-/g,"")+"-"+("0000"+DB.data.counters.purchase).slice(-4);
+        var subtotal=g.items.reduce(function(s,i){return s+i.reorder_qty*(i.cost||0);},0);
+        DB.data.purchases.unshift({id:DB.nextId("purchases"),reference:ref,supplier_id:g.supplier_id,invoice_number:"",total:Math.round(subtotal*100)/100,paid:0,status:"draft",created_at:new Date().toISOString(),
+          items:g.items.map(function(i){return{id:Math.random().toString(36).slice(2),product_id:i.product_id,name:i.name,quantity:i.reorder_qty,received_qty:0,cost:i.cost||0,line_total:Math.round(i.reorder_qty*(i.cost||0)*100)/100};})});});
+      DB.save();toast("Draft orders generated","success");active="orders";draw();}}):null]));
+    if(!groups.length){body.appendChild(el("div",{class:"empty",text:"✅ Nothing needs reordering"}));return;}
+    groups.forEach(function(g){body.appendChild(el("div",{class:"card mb"},[el("div",{class:"section-head"},[el("h3",{text:g.supplier_name}),
+      el("span",{class:"muted",text:[g.phone,g.whatsapp&&("WhatsApp: "+g.whatsapp),g.email].filter(Boolean).join(" · ")})]),
+      table([{key:"name",label:"Product"},{key:"barcode",label:t("prod.barcode")},{key:"quantity",label:"Current",num:true,render:function(r){return num(r.quantity);}},
+        {key:"min_stock",label:"Min",num:true,render:function(r){return num(r.min_stock);}},
+        {key:"reorder_qty",label:"Suggested Order",num:true,render:function(r){return "<strong>"+num(r.reorder_qty)+"</strong>";}}],g.items)]));});}
+  function reorderGroups(){var g={};DB.data.products.forEach(function(p){if(p.archived||!(p.min_stock>0)||p.quantity>p.min_stock)return;
+    var sup=DB.data.suppliers.filter(function(s){return s.id===p.supplier_id;})[0];var key=p.supplier_id||0;
+    g[key]=g[key]||{supplier_id:p.supplier_id,supplier_name:sup?sup.company_name:"Unassigned",phone:sup?sup.phone1:"",whatsapp:sup?sup.whatsapp:"",email:sup?sup.email:"",items:[]};
+    g[key].items.push({product_id:p.id,name:p.name_en,barcode:p.barcode,quantity:p.quantity,min_stock:p.min_stock,reorder_qty:Math.max(p.min_stock*2-p.quantity,p.min_stock),cost:p.purchase_price});});
+    return Object.keys(g).map(function(k){return g[k];});}
+}};
+function statusColor(s){return{received:"green",partial:"orange",draft:"gray",ordered:"blue",cancelled:"red"}[s]||"gray";}
+
+/* ---- Expenses / Register / Zakat ---- */
+var EXP_CATS=["Rent","Electricity","Water","Gas","Internet","Salaries","Fuel","Maintenance","Supplies","Miscellaneous"];
+VIEWS.expenses={title:function(){return t("nav.expenses");},render:function(root){
+  clear(root);var filter=el("select",{style:"width:auto"},[el("option",{value:""},t("common.all"))].concat(EXP_CATS.map(function(c){return el("option",{value:c},c);})));
+  var holder=el("div",{});root.appendChild(el("div",{class:"toolbar"},[filter,el("span",{class:"spacer"}),
+    el("button",{class:"btn btn-ghost btn-sm",text:"⬇ CSV",onClick:function(){csvExport("expenses.csv",["date","category","amount","note"],
+      DB.data.expenses.map(function(e){return[e.spent_on,e.category,e.amount,e.note];}));}}),
+    can("expenses")?el("button",{class:"btn btn-primary",text:"+ "+t("common.add"),onClick:function(){editModal(null);}}):null]));
+  root.appendChild(holder);filter.addEventListener("change",load);load();
+  function load(){var rows=DB.data.expenses.filter(function(e){return!filter.value||e.category===filter.value;});
+    var total=rows.reduce(function(s,e){return s+e.amount;},0);clear(holder);
+    holder.appendChild(el("div",{class:"stat stat-accent-red mb"},[el("div",{class:"stat-label",text:"Total Expenses"}),el("div",{class:"stat-value",text:money(total)})]));
+    holder.appendChild(table([{key:"spent_on",label:t("common.date")},{key:"category",label:"Category",render:function(r){return badge(r.category,"orange");}},
+      {key:"amount",label:"Amount",num:true,render:function(r){return money(r.amount);}},{key:"note",label:"Note"},{key:"user",label:"By"},
+      {key:"act",label:"",num:true,render:function(r){return can("expenses")?el("div",{class:"flex",style:"justify-content:flex-end"},[iconAction("✏️","Edit",function(){editModal(r);}),
+        iconAction("🗑","Delete",function(){confirmModal("Delete expense?",function(){DB.data.expenses=DB.data.expenses.filter(function(x){return x.id!==r.id;});DB.save();load();});})]):"";}}],rows,{empty:"No expenses"}));}
+  function editModal(r){var form=buildForm([{name:"category",label:"Category",type:"select",options:EXP_CATS.map(function(c){return{value:c,label:c};})},
+    {name:"amount",label:"Amount",type:"number",step:"0.01"},{name:"spent_on",label:t("common.date"),type:"date",default:today()},
+    {name:"note",label:"Note",type:"textarea",full:true}],r||{});
+    modal(r?t("common.edit"):t("common.add"),form.node,[{label:t("common.cancel"),class:"btn-ghost"},
+      {label:t("common.save"),class:"btn-primary",onClick:function(){var v=form.values();if(v.amount<=0){toast("Amount must be positive","error");return false;}
+        v.spent_on=v.spent_on||today();if(r){for(var k in v)r[k]=v[k];}else{v.id=DB.nextId("expenses");v.user=SESSION.user.username;DB.data.expenses.unshift(v);}
+        DB.save();log("expense","expense",v.category+" "+v.amount);toast("Saved","success");load();}}]);}
+}};
+VIEWS.register={title:function(){return t("nav.register");},render:function(root){
+  clear(root);var open=DB.data.registers.filter(function(r){return r.status==="open"&&r.user===SESSION.user.username;})[0];
+  if(!open){var opening=el("input",{type:"number",step:"0.01",value:0});
+    root.appendChild(el("div",{class:"card",style:"max-width:420px;margin:auto"},[el("h3",{class:"mb",text:"Open Cash Register"}),
+      el("div",{class:"field mb"},[el("label",{text:"Opening Cash"}),opening]),
+      el("button",{class:"btn btn-primary btn-block",text:"Open Register",onClick:function(){
+        DB.data.registers.unshift({id:DB.nextId("registers"),user:SESSION.user.username,opening_cash:parseFloat(opening.value)||0,
+          closing_cash:null,counted_cash:null,expected_cash:null,difference:null,status:"open",opened_at:new Date().toISOString(),closed_at:null});
+        DB.save();log("open_register","register","");VIEWS.register.render(root);}})]));}
+  else{var cashSales=0;DB.data.sales.forEach(function(s){if(s.status==="completed"&&(s.payment_method==="cash"||s.payment_method==="mixed")&&new Date(s.created_at)>=new Date(open.opened_at))cashSales+=s.total;});
+    var expected=open.opening_cash+cashSales;var counted=el("input",{type:"number",step:"0.01",value:expected.toFixed(2)});
+    var diffEl=el("strong",{text:money(0)});counted.addEventListener("input",function(){var diff=(parseFloat(counted.value)||0)-expected;
+      diffEl.textContent=money(diff);diffEl.className=diff===0?"":(diff>0?"up":"down");});
+    root.appendChild(el("div",{class:"grid stats-grid mb"},[statCard("Opening Cash",money(open.opening_cash),"","blue"),
+      statCard("Cash Sales",money(cashSales),"","green"),statCard("Expected in Drawer",money(expected),"","orange")]));
+    root.appendChild(el("div",{class:"card",style:"max-width:460px"},[el("h3",{class:"mb",text:"Close Register (Cash Count)"}),
+      el("div",{class:"field mb"},[el("label",{text:"Counted Cash"}),counted]),el("div",{class:"flex mb",style:"justify-content:space-between"},[el("span",{text:"Difference"}),diffEl]),
+      el("button",{class:"btn btn-danger btn-block",text:"Close Register",onClick:function(){var c=parseFloat(counted.value)||0;var diff=Math.round((c-expected)*100)/100;
+        open.status="closed";open.counted_cash=c;open.closing_cash=c;open.expected_cash=Math.round(expected*100)/100;open.difference=diff;open.closed_at=new Date().toISOString();
+        DB.save();log("close_register","register","difference="+diff);toast("Closed. Difference: "+money(diff),diff===0?"success":"error");VIEWS.register.render(root);}})]));}
+  root.appendChild(el("div",{class:"card mt"},[el("h3",{class:"mb",text:"Register History"}),
+    table([{key:"opened_at",label:"Opened",render:function(x){return fmtDate(x.opened_at);}},{key:"closed_at",label:"Closed",render:function(x){return x.closed_at?fmtDate(x.closed_at):"—";}},{key:"user",label:"By"},
+      {key:"opening_cash",label:"Opening",num:true,render:function(x){return money(x.opening_cash);}},
+      {key:"counted_cash",label:"Counted",num:true,render:function(x){return x.counted_cash!=null?money(x.counted_cash):"—";}},
+      {key:"difference",label:"Difference",num:true,render:function(x){return x.difference!=null?"<span class='"+(x.difference==0?"":(x.difference>0?"up":"down"))+"'>"+money(x.difference)+"</span>":"—";}},
+      {key:"status",label:"Status",render:function(x){return badge(x.status,x.status==="open"?"green":"gray");}}],DB.data.registers.slice(0,100),{empty:"No history"})]));
+}};
+VIEWS.zakat={title:function(){return t("nav.zakat");},render:function(root){
+  clear(root);var inv=inventoryValue();var receivables=0;DB.data.customers.forEach(function(c){receivables+=c.credit||0;});
+  var cash=0;DB.data.registers.forEach(function(r){if(r.status==="open")cash+=r.opening_cash;});
+  var debts=0;DB.data.suppliers.forEach(function(s){if(s.balance>0)debts+=s.balance;});
+  var defs={cash_on_hand:Math.round(cash*100)/100,bank_balance:0,inventory_value:inv.cost_value,receivables:Math.round(receivables*100)/100,debts:Math.round(debts*100)/100};
+  var labels={cash_on_hand:"Cash on Hand",bank_balance:"Bank Balance",inventory_value:"Inventory Value",receivables:"Receivables",debts:"Debts (subtract)"};
+  var fields=["cash_on_hand","bank_balance","inventory_value","receivables","debts"];var inputs={};
+  var rateInput=el("input",{type:"number",step:"0.01",value:DB.data.settings.zakat_rate||2.5,style:"width:100px"});
+  var form=el("div",{class:"form-grid"},fields.map(function(f){var i=el("input",{type:"number",step:"0.01",value:defs[f]});i.addEventListener("input",recalc);inputs[f]=i;
+    return el("div",{class:"field"},[el("label",{text:labels[f]}),i]);}));rateInput.addEventListener("input",recalc);
+  var results=el("div",{class:"grid stats-grid mt"});
+  root.appendChild(el("div",{class:"card"},[el("h3",{class:"mb",text:"🕌 Zakat Calculator (2.5% on net zakatable wealth)"}),form,
+    el("div",{class:"field mt",style:"max-width:200px"},[el("label",{text:"Zakat Rate %"}),rateInput]),results,
+    el("button",{class:"btn btn-primary mt",text:"🖨 Print Report",onClick:printReport})]));recalc();
+  function calc(){var rate=parseFloat(rateInput.value)||2.5;var z=0;fields.forEach(function(f){var v=parseFloat(inputs[f].value)||0;z+=(f==="debts"?-v:v);});
+    z=Math.max(z,0);var due=Math.round(z*rate/100*100)/100;return{net:Math.round(z*100)/100,due:due,rate:rate,monthly:Math.round(due/12*100)/100,quarterly:Math.round(due/4*100)/100};}
+  function recalc(){var r=calc();clear(results);results.appendChild(statCard("Net Zakatable Wealth",money(r.net),"","blue"));
+    results.appendChild(statCard("Zakat Due (Yearly)",money(r.due),r.rate+"%","green"));
+    results.appendChild(statCard("Quarterly Estimate",money(r.quarterly),"","orange"));
+    results.appendChild(statCard("Monthly Estimate",money(r.monthly),"","orange"));}
+  function printReport(){var r=calc();var st=DB.data.settings;var w=window.open("","_blank");
+    w.document.write("<html><head><title>Zakat Report</title><style>body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:20px}"+
+      "h1{text-align:center}table{width:100%;border-collapse:collapse;margin-top:20px}td{padding:8px;border-bottom:1px solid #ddd}"+
+      ".r{text-align:right}.tot{font-weight:bold;font-size:18px}</style></head><body><h1>Zakat Report</h1>"+
+      "<p style='text-align:center'>"+esc(st.store_name)+"</p><table>"+
+      fields.map(function(f){return "<tr><td>"+labels[f]+"</td><td class='r'>"+(f==="debts"?"-":"")+money(Math.abs(parseFloat(inputs[f].value)||0))+"</td></tr>";}).join("")+
+      "<tr class='tot'><td>Net Zakatable Wealth</td><td class='r'>"+money(r.net)+"</td></tr>"+
+      "<tr><td>Zakat Rate</td><td class='r'>"+r.rate+"%</td></tr>"+
+      "<tr class='tot'><td>Zakat Due</td><td class='r'>"+money(r.due)+"</td></tr></table>"+
+      "<p style='margin-top:20px;color:#666;font-size:13px'>Calculation: (Cash + Bank + Inventory + Receivables − Debts) × Rate</p>"+
+      "<script>window.onload=function(){window.print();}<\/script></body></html>");w.document.close();}
+}};
+
+/* ---- Reports ---- */
+VIEWS.reports={title:function(){return t("nav.reports");},render:function(root){
+  clear(root);var reps={sales:"Sales",inventory:"Inventory",financial:"Financial",suppliers:"Suppliers",customers:"Customers",employees:"Employees"};
+  var active="sales";var from=el("input",{type:"date",style:"width:auto"});var to=el("input",{type:"date",style:"width:auto"});
+  var groupSel=el("select",{style:"width:auto"},["day","week","month","year"].map(function(g){return el("option",{value:g},g);}));
+  var controls=el("div",{class:"toolbar"});var body=el("div",{});
+  var tabBar=el("div",{class:"tabs"},Object.keys(reps).map(function(id){return el("div",{class:"tab"+(id===active?" active":""),text:reps[id],
+    onClick:function(e){active=id;var ts=tabBar.querySelectorAll(".tab");for(var i=0;i<ts.length;i++)ts[i].classList.remove("active");e.target.classList.add("active");draw();}});}));
+  root.appendChild(tabBar);root.appendChild(controls);root.appendChild(body);draw();
+  function inRange(iso){var d=dnorm(iso);if(from.value&&d<from.value)return false;if(to.value&&d>to.value)return false;return true;}
+  function draw(){clear(controls);controls.appendChild(el("label",{text:"From"}));controls.appendChild(from);
+    controls.appendChild(el("label",{text:"To"}));controls.appendChild(to);
+    if(active==="sales"){controls.appendChild(el("label",{text:"Group"}));controls.appendChild(groupSel);}
+    controls.appendChild(el("button",{class:"btn btn-primary btn-sm",text:"↻ "+t("common.search"),onClick:run}));
+    controls.appendChild(el("span",{class:"spacer"}));controls.appendChild(el("button",{class:"btn btn-ghost btn-sm",text:"CSV",onClick:exportCsv}));run();}
+  var lastRows=[],lastHeaders=[];
+  function run(){clear(body);if(active==="sales")salesR();else if(active==="inventory")invR();else if(active==="financial")finR();
+    else if(active==="suppliers")supR();else if(active==="customers")custR();else empR();}
+  function setExport(headers,rows){lastHeaders=headers;lastRows=rows;}
+  function exportCsv(){csvExport(active+"_report.csv",lastHeaders,lastRows);}
+  function salesR(){var buckets={};completedSales().forEach(function(s){if(!inRange(s.created_at))return;var d=new Date(s.created_at);var key;
+    if(groupSel.value==="day")key=dnorm(s.created_at);else if(groupSel.value==="week"){var wk=new Date(d);wk.setDate(d.getDate()-((d.getDay()+6)%7));key=dnorm(wk.toISOString())+" (wk)";}
+    else if(groupSel.value==="month")key=s.created_at.slice(0,7);else key=s.created_at.slice(0,4);
+    buckets[key]=buckets[key]||{period:key,orders:0,revenue:0,profit:0,tax:0};buckets[key].orders++;buckets[key].revenue+=s.total;buckets[key].profit+=s.profit;buckets[key].tax+=s.tax;});
+    var rows=Object.keys(buckets).map(function(k){return buckets[k];}).sort(function(a,b){return a.period<b.period?1:-1;});
+    var tot={orders:0,revenue:0,profit:0};rows.forEach(function(r){tot.orders+=r.orders;tot.revenue+=r.revenue;tot.profit+=r.profit;});
+    body.appendChild(el("div",{class:"grid stats-grid mb"},[statCard("Orders",num(tot.orders),"","blue"),statCard("Revenue",money(tot.revenue),"","green"),statCard("Profit",money(tot.profit),"","orange")]));
+    body.appendChild(table([{key:"period",label:"Period"},{key:"orders",label:"Orders",num:true},
+      {key:"revenue",label:"Revenue",num:true,render:function(r){return money(r.revenue);}},
+      {key:"profit",label:"Profit",num:true,render:function(r){return money(r.profit);}},
+      {key:"tax",label:"Tax",num:true,render:function(r){return money(r.tax);}}],rows,{empty:"No data"}));
+    setExport(["Period","Orders","Revenue","Profit","Tax"],rows.map(function(r){return[r.period,r.orders,r.revenue,r.profit,r.tax];}));}
+  function invR(){var kindSel=el("select",{style:"width:auto"},[["stock","All Stock"],["low","Low"],["out","Out"],["expiry","Expiry"]].map(function(k){return el("option",{value:k[0]},k[1]);}));
+    kindSel.addEventListener("change",function(){clear(tableHolder);tableHolder.appendChild(build(kindSel.value));});
+    body.appendChild(el("div",{class:"toolbar"},[el("label",{text:"View"}),kindSel]));var tableHolder=el("div",{});body.appendChild(tableHolder);tableHolder.appendChild(build("stock"));
+    function build(kind){var rows=DB.data.products.filter(function(p){if(p.archived)return false;
+      if(kind==="low")return p.min_stock>0&&p.quantity<=p.min_stock;if(kind==="out")return p.quantity<=0;
+      if(kind==="expiry")return p.expiry_date&&dnorm(p.expiry_date)<=new Date(Date.now()+60*864e5).toISOString().slice(0,10);return true;})
+      .map(function(p){return{name:p.name_en,barcode:p.barcode,quantity:p.quantity,selling_price:p.selling_price,expiry_date:p.expiry_date||"—",stock_value:Math.round(p.quantity*p.purchase_price*100)/100};});
+      var total=rows.reduce(function(s,r){return s+r.stock_value;},0);
+      setExport(["Name","Barcode","Qty","Price","Expiry","Value"],rows.map(function(r){return[r.name,r.barcode,r.quantity,r.selling_price,r.expiry_date,r.stock_value];}));
+      return el("div",{},[el("div",{class:"stat stat-accent-blue mb"},[el("div",{class:"stat-label",text:"Total Stock Value"}),el("div",{class:"stat-value",text:money(total)})]),
+        table([{key:"name",label:"Product"},{key:"barcode",label:"Barcode"},{key:"quantity",label:"Qty",num:true,render:function(r){return num(r.quantity,2);}},
+          {key:"selling_price",label:"Price",num:true,render:function(r){return money(r.selling_price);}},{key:"expiry_date",label:"Expiry"},
+          {key:"stock_value",label:"Value",num:true,render:function(r){return money(r.stock_value);}}],rows,{empty:"No data"})]);}}
+  function finR(){var sales=salesMetrics(function(s){return inRange(s.created_at);});var exp=expenseTotal(function(e){return inRange(e.spent_on);});
+    var byCat={};DB.data.expenses.forEach(function(e){if(!inRange(e.spent_on))return;byCat[e.category]=(byCat[e.category]||0)+e.amount;});
+    var catRows=Object.keys(byCat).map(function(k){return{category:k,total:byCat[k]};}).sort(function(a,b){return b.total-a.total;});
+    var net=sales.gross_profit-exp;
+    body.appendChild(el("div",{class:"grid stats-grid"},[statCard("Revenue",money(sales.revenue),"","blue"),statCard("Cost of Goods",money(sales.cost),"","orange"),
+      statCard("Gross Profit",money(sales.gross_profit),"","green"),statCard("Expenses",money(exp),"","red"),
+      statCard("Tax Collected",money(sales.tax),"","blue"),statCard("Net Profit",money(Math.round(net*100)/100),"","green")]));
+    body.appendChild(el("div",{class:"card mt"},[el("h3",{class:"mb",text:"Expenses by Category"}),
+      table([{key:"category",label:"Category"},{key:"total",label:"Total",num:true,render:function(r){return money(r.total);}}],catRows,{empty:"No expenses"})]));
+    setExport(["Metric","Amount"],[["Revenue",sales.revenue],["Cost of Goods",sales.cost],["Gross Profit",sales.gross_profit],["Expenses",exp],["Net Profit",Math.round(net*100)/100]]);}
+  function supR(){var rows=DB.data.suppliers.filter(function(s){return s.active;}).map(function(s){var orders=DB.data.purchases.filter(function(p){return p.supplier_id===s.id;});
+    return{name:s.company_name,phone1:s.phone1,balance:s.balance,orders:orders.length,purchased:orders.reduce(function(a,p){return a+p.total;},0)};}).sort(function(a,b){return b.balance-a.balance;});
+    body.appendChild(table([{key:"name",label:"Supplier"},{key:"phone1",label:"Phone"},{key:"orders",label:"Orders",num:true},
+      {key:"purchased",label:"Purchased",num:true,render:function(r){return money(r.purchased);}},{key:"balance",label:"Balance",num:true,render:function(r){return money(r.balance);}}],rows,{empty:"No data"}));
+    setExport(["Supplier","Phone","Orders","Purchased","Balance"],rows.map(function(r){return[r.name,r.phone1,r.orders,r.purchased,r.balance];}));}
+  function custR(){var rows=DB.data.customers.filter(function(c){return c.active!==0;}).map(function(c){var sales=DB.data.sales.filter(function(s){return s.customer_id===c.id&&s.status==="completed";});
+    return{name:c.name,phone:c.phone,orders:sales.length,spent:sales.reduce(function(a,s){return a+s.total;},0),credit:c.credit};}).sort(function(a,b){return b.spent-a.spent;});
+    body.appendChild(table([{key:"name",label:"Customer"},{key:"phone",label:"Phone"},{key:"orders",label:"Orders",num:true},
+      {key:"spent",label:"Spent",num:true,render:function(r){return money(r.spent);}},{key:"credit",label:"Credit",num:true,render:function(r){return money(r.credit);}}],rows,{empty:"No data"}));
+    setExport(["Customer","Phone","Orders","Spent","Credit"],rows.map(function(r){return[r.name,r.phone,r.orders,r.spent,r.credit];}));}
+  function empR(){var rows=DB.data.users.map(function(u){var sales=completedSales().filter(function(s){return s.user===u.username&&inRange(s.created_at);});
+    return{username:u.username,full_name:u.full_name,transactions:sales.length,revenue:sales.reduce(function(a,s){return a+s.total;},0),profit:sales.reduce(function(a,s){return a+s.profit;},0)};}).sort(function(a,b){return b.revenue-a.revenue;});
+    body.appendChild(table([{key:"username",label:"User"},{key:"full_name",label:"Name"},{key:"transactions",label:"Transactions",num:true},
+      {key:"revenue",label:"Revenue",num:true,render:function(r){return money(r.revenue);}},{key:"profit",label:"Profit",num:true,render:function(r){return money(r.profit);}}],rows,{empty:"No data"}));
+    setExport(["User","Name","Transactions","Revenue","Profit"],rows.map(function(r){return[r.username,r.full_name,r.transactions,r.revenue,r.profit];}));}
+}};
+
+/* ---- Sales history ---- */
+VIEWS.history={title:function(){return t("nav.history");},render:function(root){
+  clear(root);var search=el("input",{class:"grow",placeholder:"Search receipt number..."});var holder=el("div",{});
+  root.appendChild(el("div",{class:"toolbar"},[search]));root.appendChild(holder);
+  var timer;search.addEventListener("input",function(){clearTimeout(timer);timer=setTimeout(load,150);});load();
+  function custName(id){var c=DB.data.customers.filter(function(x){return x.id===id;})[0];return c?c.name:"—";}
+  function load(){var q=search.value.trim().toLowerCase();var rows=DB.data.sales.filter(function(s){return!q||s.receipt_no.toLowerCase().indexOf(q)>-1;});clear(holder);
+    holder.appendChild(table([{key:"receipt_no",label:"Receipt",render:function(r){return "<strong>"+esc(r.receipt_no)+"</strong>";}},
+      {key:"created_at",label:"Date",render:function(r){return fmtDate(r.created_at);}},{key:"user",label:"Cashier"},
+      {key:"customer",label:"Customer",render:function(r){return custName(r.customer_id);}},
+      {key:"total",label:"Total",num:true,render:function(r){return money(r.total);}},
+      {key:"payment_method",label:"Payment",render:function(r){return badge(r.payment_method,"blue");}},
+      {key:"status",label:"Status",render:function(r){return badge(r.status,r.status==="completed"?"green":(r.status==="refunded"?"red":"orange"));}},
+      {key:"act",label:"",num:true,render:function(r){var w=el("div",{class:"flex",style:"justify-content:flex-end"});
+        w.appendChild(iconAction("🖨","Reprint",function(){printReceipt(r);}));
+        if(can("refund")&&r.status==="completed")w.appendChild(iconAction("↩️","Refund",function(){refundModal(r);}));return w;}}],rows.slice(0,200),{empty:"No sales"}));}
+  function refundModal(r){var inputs={};var rows=r.items.map(function(it){var max=it.quantity-it.refunded_qty;var i=el("input",{type:"number",step:"any",value:max,style:"width:80px"});inputs[it.id||it.name]=i;return{it:it,i:i,max:max};});
+    modal("Refund · "+r.receipt_no,table([{key:"name",label:"Product",render:function(x){return x.it.name;}},
+      {key:"sold",label:"Sold",num:true,render:function(x){return num(x.it.quantity);}},{key:"r",label:"Refund Qty",num:true,render:function(x){return x.i;}}],rows),
+      [{label:t("common.cancel"),class:"btn-ghost"},{label:"Process Refund",class:"btn-danger",onClick:function(){var amount=0;
+        r.items.forEach(function(it){var key=it.id||it.name;var qty=Math.min(parseFloat(inputs[key].value)||0,it.quantity-it.refunded_qty);
+          if(qty>0){var prop=qty/it.quantity;amount+=it.line_total*prop;it.refunded_qty+=qty;if(it.product_id)adjustStock(it.product_id,qty,"return","Refund "+r.receipt_no);}});
+        var remaining=r.items.reduce(function(s,it){return s+(it.quantity-it.refunded_qty);},0);r.status=remaining<=0?"refunded":"partial_refund";
+        DB.save();log("refund","sale",r.receipt_no+" amount="+Math.round(amount*100)/100);toast("Refunded "+money(amount),"success");load();}}],{large:true});}
+}};
+
+/* ---- Users / Settings / Backup ---- */
+VIEWS.users={title:function(){return t("nav.users");},render:function(root){
+  clear(root);var active="users";var body=el("div",{});
+  var tabBar=el("div",{class:"tabs"},[tab("users","Users"),tab("activity","Activity Log"),tab("backup","Backup & Data")]);
+  root.appendChild(tabBar);root.appendChild(body);
+  function tab(id,label){return el("div",{class:"tab"+(id===active?" active":""),text:label,onClick:function(e){active=id;
+    var ts=tabBar.querySelectorAll(".tab");for(var i=0;i<ts.length;i++)ts[i].classList.remove("active");e.target.classList.add("active");draw();}});}
+  draw();function draw(){clear(body);if(active==="users")usersT();else if(active==="activity")activityT();else backupT();}
+  function usersT(){body.appendChild(el("div",{class:"toolbar"},[el("span",{class:"spacer"}),el("button",{class:"btn btn-primary",text:"+ "+t("common.add"),onClick:function(){userModal(null);}})]));
+    body.appendChild(table([{key:"username",label:"Username",render:function(u){return "<strong>"+esc(u.username)+"</strong>";}},
+      {key:"full_name",label:"Full Name"},{key:"role",label:"Role",render:function(u){return badge(ROLE_LABELS[u.role]||u.role,"blue");}},
+      {key:"last_login",label:"Last Login",render:function(u){return u.last_login?fmtDate(u.last_login):"—";}},
+      {key:"active",label:"Status",render:function(u){return badge(u.active?"Active":"Disabled",u.active?"green":"gray");}},
+      {key:"act",label:"",num:true,render:function(u){return el("div",{class:"flex",style:"justify-content:flex-end"},[iconAction("✏️","Edit",function(){userModal(u);}),
+        iconAction("🗑","Disable",function(){var admins=DB.data.users.filter(function(x){return x.role==="administrator"&&x.active;}).length;
+          if(u.role==="administrator"&&admins<=1){toast("Cannot disable the last administrator","error");return;}
+          confirmModal("Disable user?",function(){u.active=0;DB.save();draw();});})]);}}],DB.data.users,{empty:"No users"}));}
+  function userModal(u){var form=buildForm([{name:"username",label:"Username",hidden:!!u},{name:"full_name",label:"Full Name"},
+    {name:"role",label:"Role",type:"select",options:Object.keys(ROLE_LABELS).map(function(r){return{value:r,label:ROLE_LABELS[r]};})},
+    {name:"password",label:u?"New Password (blank = keep)":"Password",type:"password"}],u||{});
+    modal(u?"Edit User":"New User",form.node,[{label:t("common.cancel"),class:"btn-ghost"},{label:t("common.save"),class:"btn-primary",onClick:function(){var v=form.values();
+      if(u){u.full_name=v.full_name;u.role=v.role;if(v.password){if(v.password.length<6){toast("Password too short","error");return false;}u.password=hashPw(v.password);}}
+      else{if(!v.username||v.password.length<6){toast("Username and 6+ char password required","error");return false;}
+        if(DB.data.users.filter(function(x){return x.username===v.username;})[0]){toast("Username exists","error");return false;}
+        DB.data.users.push({id:DB.nextId("users"),username:v.username,full_name:v.full_name,password:hashPw(v.password),role:v.role,active:1,last_login:null});}
+      DB.save();log("save_user","user",v.username||u.username);toast("Saved","success");draw();}}]);}
+  function activityT(){body.appendChild(el("div",{class:"card"},[el("h3",{class:"mb",text:"Audit Trail"}),
+    table([{key:"created_at",label:t("common.date"),render:function(r){return fmtDate(r.created_at);}},{key:"user",label:"User"},
+      {key:"action",label:"Action",render:function(r){return badge(r.action,"blue");}},{key:"entity",label:"Entity"},{key:"detail",label:"Detail"}],DB.data.activity.slice(0,500),{empty:"No activity"})]));}
+  function backupT(){body.appendChild(el("div",{class:"banner",html:"All data lives in <strong>this browser only</strong> (localStorage). Export a backup file regularly, especially before clearing browser data or switching devices."}));
+    body.appendChild(el("div",{class:"card"},[el("h3",{class:"mb",text:"Backup & Restore"}),
+      el("div",{class:"flex",style:"flex-wrap:wrap"},[
+        el("button",{class:"btn btn-primary",text:"💾 Export Backup (.json)",onClick:function(){var blob=new Blob([JSON.stringify(DB.data)],{type:"application/json"});
+          var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="kaka_backup_"+today()+".json";a.click();log("backup_export","backup","");toast("Backup exported","success");}}),
+        (function(){var fi=el("input",{type:"file",accept:".json",style:"display:none"});fi.addEventListener("change",function(){var f=fi.files[0];if(!f)return;
+          var rd=new FileReader();rd.onload=function(){try{var d=JSON.parse(rd.result);if(!d.products||!d.settings)throw 0;
+            confirmModal("Restore this backup? Current data will be replaced.",function(){DB.data=d;DB.save();toast("Backup restored","success");render();});}catch(e){toast("Invalid backup file","error");}};rd.readAsText(f);});
+          var b=el("button",{class:"btn btn-ghost",text:"⬆ Restore Backup",onClick:function(){fi.click();}});return el("span",{},[b,fi]);})(),
+        el("button",{class:"btn btn-danger",text:"🗑 Reset All Data",onClick:function(){confirmModal("Erase ALL data and reload sample data? This cannot be undone.",function(){DB.reset();toast("Data reset","success");
+          SESSION.user=null;boot();});}})])]));
+    body.appendChild(el("div",{class:"card mt"},[el("h3",{class:"mb",text:"Data Summary"}),
+      table([{key:"k",label:"Entity"},{key:"v",label:"Records",num:true}],[["Products",DB.data.products.length],["Sales",DB.data.sales.length],
+        ["Customers",DB.data.customers.length],["Suppliers",DB.data.suppliers.length],["Purchases",DB.data.purchases.length],
+        ["Expenses",DB.data.expenses.length],["Stock movements",DB.data.movements.length]].map(function(x){return{k:x[0],v:num(x[1])};}))]));}
+}};
+VIEWS.settings={title:function(){return t("nav.settings");},render:function(root){
+  clear(root);var s=DB.data.settings;var form=buildForm([{name:"store_name",label:"Store Name"},{name:"store_phone",label:"Phone"},
+    {name:"store_address",label:"Address",full:true},{name:"currency",label:"Currency"},
+    {name:"tax_rate",label:"Default Tax %",type:"number",step:"0.01"},{name:"zakat_rate",label:"Zakat Rate %",type:"number",step:"0.01"},
+    {name:"receipt_width",label:"Receipt Width (mm)",type:"select",options:[{value:"58",label:"58 mm"},{value:"80",label:"80 mm"}]},
+    {name:"receipt_footer",label:"Receipt Footer",full:true}],s);
+  root.appendChild(el("div",{class:"card",style:"max-width:760px"},[el("h3",{class:"mb",text:"Store Settings"}),form.node,
+    el("button",{class:"btn btn-primary mt",text:t("common.save"),onClick:function(){var v=form.values();
+      v.tax_rate=parseFloat(v.tax_rate)||0;v.zakat_rate=parseFloat(v.zakat_rate)||2.5;v.receipt_width=parseInt(v.receipt_width)||80;
+      for(var k in v)s[k]=v[k];DB.save();log("update_settings","settings","");toast("Settings saved","success");}})]));
+}};
+
+/* ======================================================================
+   Shell, navigation, boot
+   ====================================================================== */
+var NAV=[["dashboard","📊","dashboard"],["pos","🛒","pos"],["products","📦","products.view"],["inventory","📋","inventory"],
+  ["purchases","🚚","purchases"],["suppliers","🏭","suppliers"],["customers","👥","customers"],["history","🧾","history"],
+  ["expenses","💸","expenses"],["reports","📈","reports"],["register","💰","register"],["zakat","🕌","zakat"],
+  ["users","🔐","*"],["settings","⚙️","settings"]];
+function navLabel(id){var k="nav."+id;var v=t(k);return v!==k?v:(id.charAt(0).toUpperCase()+id.slice(1));}
+
+function applyLang(lang){SESSION.lang=lang;localStorage.setItem("kaka_lang",lang);
+  document.documentElement.lang=lang;document.documentElement.dir=lang==="ar"?"rtl":"ltr";}
+function applyTheme(theme){SESSION.theme=theme;localStorage.setItem("kaka_theme",theme);document.body.setAttribute("data-theme",theme);}
+
+function renderLogin(){var root=document.getElementById("root");
+  applyLang(SESSION.lang);applyTheme(SESSION.theme);
+  document.body.className="login-body";
+  root.innerHTML="";
+  var err=el("div",{class:"login-error",hidden:true});
+  var user=el("input",{type:"text",id:"lg-user",value:""});var pass=el("input",{type:"password",id:"lg-pass"});
+  var card=el("form",{class:"login-card",onSubmit:function(e){e.preventDefault();
+    if(login(user.value.trim(),pass.value)){boot();}else{err.textContent=t("login.invalid");err.hidden=false;}}},[
+    el("div",{class:"login-logo",text:"🛒"}),el("h1",{text:DB.data.settings.store_name||"KAKA POS"}),
+    el("p",{class:"login-sub",text:t("login.subtitle")}),
+    el("div",{class:"lang-switch"},["en","fr","ar"].map(function(l){return el("button",{type:"button",text:l==="ar"?"ع":l.toUpperCase(),
+      onClick:function(){applyLang(l);renderLogin();}});})),
+    el("label",{text:t("login.username")}),user,el("label",{text:t("login.password")}),pass,err,
+    el("button",{type:"submit",class:"btn btn-primary btn-block",text:t("login.signin")}),
+    el("p",{class:"login-hint",html:"Default admin — <strong>admin / admin123</strong>"})]);
+  root.appendChild(el("div",{class:"login-wrap"},card));}
+
+function renderShell(){var root=document.getElementById("root");document.body.className="";clear(root);
+  var nav=el("nav",{class:"nav",id:"nav"});
+  NAV.forEach(function(item){if(!can(item[2]))return;nav.appendChild(el("a",{href:"#/"+item[0],"data-view":item[0]},
+    [el("span",{class:"nav-icon",text:item[1]}),el("span",{text:navLabel(item[0])})]));});
+  var u=SESSION.user;
+  var sidebar=el("aside",{class:"sidebar",id:"sidebar"},[el("div",{class:"brand"},[el("span",{class:"brand-icon",text:"🛒"}),
+    el("span",{text:DB.data.settings.store_name||"KAKA POS"})]),nav,
+    el("div",{class:"sidebar-footer"},el("div",{class:"user-chip"},[el("span",{class:"user-avatar",text:(u.username[0]||"U").toUpperCase()}),
+      el("div",{},[el("div",{class:"user-name",text:u.full_name||u.username}),el("div",{class:"user-role",text:ROLE_LABELS[u.role]})])]))]);
+  var langSel=el("select",{class:"mini-select",title:"Language"},["en","fr","ar"].map(function(l){return el("option",{value:l},l==="ar"?"ع":l.toUpperCase());}));
+  langSel.value=SESSION.lang;langSel.addEventListener("change",function(){applyLang(langSel.value);renderShell();route();});
+  var userMenu=el("div",{class:"dropdown-menu",id:"user-menu"},[el("a",{text:t("menu.change_password"),onClick:changePassword}),el("a",{text:t("menu.logout"),onClick:function(){logout();renderLogin();}})]);
+  var topbar=el("header",{class:"topbar"},[el("button",{class:"icon-btn",id:"menu-toggle",text:"☰",onClick:function(){document.getElementById("sidebar").classList.toggle("open");}}),
+    el("h2",{id:"page-title"}),el("div",{class:"topbar-actions"},[langSel,
+      el("button",{class:"icon-btn",title:"Theme",text:"🌓",onClick:function(){applyTheme(SESSION.theme==="light"?"dark":"light");}}),
+      el("div",{class:"dropdown"},[el("button",{class:"icon-btn",text:"⚙️",onClick:function(e){e.stopPropagation();userMenu.classList.toggle("open");}}),userMenu])])]);
+  document.addEventListener("click",function(){userMenu.classList.remove("open");});
+  root.appendChild(el("div",{class:"app-shell"},[sidebar,el("div",{class:"main"},[topbar,el("main",{class:"view",id:"view"})])]));}
+
+function changePassword(){var form=buildForm([{name:"current",label:"Current Password",type:"password",full:true},
+  {name:"next",label:"New Password",type:"password",full:true}]);
+  modal(t("menu.change_password"),form.node,[{label:t("common.cancel"),class:"btn-ghost"},{label:t("common.save"),class:"btn-primary",onClick:function(){var v=form.values();
+    if(SESSION.user.password!==hashPw(v.current)){toast("Current password is incorrect","error");return false;}
+    if(v.next.length<6){toast("New password must be 6+ characters","error");return false;}
+    SESSION.user.password=hashPw(v.next);DB.save();log("change_password","user","");toast("Password changed","success");}}]);}
+
+function route(){var id=(location.hash||"#/dashboard").replace("#/","")||"dashboard";
+  var item=NAV.filter(function(i){return i[0]===id;})[0];
+  if(!item||!can(item[2])||!VIEWS[id]){id="dashboard";if(!can("dashboard")){var first=NAV.filter(function(i){return can(i[2]);})[0];if(first)id=first[0];}}
+  var links=document.querySelectorAll("#nav a");for(var i=0;i<links.length;i++)links[i].classList.toggle("active",links[i].getAttribute("data-view")===id);
+  document.getElementById("page-title").textContent=VIEWS[id].title();
+  document.getElementById("sidebar").classList.remove("open");var view=document.getElementById("view");view.scrollTop=0;
+  try{VIEWS[id].render(view);}catch(e){view.innerHTML='<div class="empty">Error: '+esc(e.message)+"</div>";console.error(e);}}
+
+function boot(){DB.load();
+  if(!SESSION.user){renderLogin();return;}
+  applyLang(SESSION.user_lang||SESSION.lang);applyTheme(SESSION.theme);
+  renderShell();
+  window.onhashchange=route;
+  if(!location.hash)location.hash="#/dashboard";route();}
+
+DB.load();boot();
+</script>
+</body>
+</html>

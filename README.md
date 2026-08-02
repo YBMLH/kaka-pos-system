@@ -46,7 +46,41 @@ all data stays on the local machine.
 
 ---
 
-## Quick Start
+## Two ways to run
+
+This repo ships **two builds** of the same system:
+
+1. **Full app (Flask + SQLite)** — the production system for a real store:
+   multi-terminal, one shared database, server-side PDF/Excel, thermal receipts.
+   Run it with `python run.py` (see below).
+2. **Standalone single file** — [`docs/index.html`](docs/index.html): the entire
+   POS in one HTML file that runs 100% in the browser with **no backend**. Data
+   is stored in that browser (localStorage). Great for quick evaluation, demos,
+   or a single lightweight till. Just **download it and double-click**, or host
+   it for free on GitHub Pages.
+
+> Which to use? The **Flask app** for an actual store (shared data across tills,
+> proper database, backups). The **standalone file** for testing/evaluating on
+> any device with nothing to install — data stays on that one device.
+
+### Try it instantly (standalone)
+
+- **Download & open:** grab `docs/index.html`, open it in any modern browser.
+- **GitHub Pages:** in the repo, *Settings → Pages → Source: Deploy from a
+  branch → Branch: `main` / folder: `/docs`*. Your POS is then live at
+  `https://<user>.github.io/kaka-pos-system/`.
+
+Log in with `admin / admin123` (a `cashier / cashier123` demo user also exists).
+The standalone build seeds sample products on first run and includes a
+**Users → Backup & Data** tab to export/restore your data as a JSON file — do
+this before clearing browser data, since that browser *is* the storage.
+
+Standalone-build differences vs. the Flask app: passwords are stored with a
+lightweight in-browser hash (client-side JS can't provide real server security),
+receipts and the zakat report print via the browser's print dialog instead of
+generating thermal PDFs, and exports are CSV rather than Excel/PDF.
+
+## Quick Start (Full Flask app)
 
 ```bash
 # 1. Install dependencies
