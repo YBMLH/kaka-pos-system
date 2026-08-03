@@ -264,6 +264,15 @@ td.num,th.num{text-align:end;font-variant-numeric:tabular-nums}
   color:var(--text-muted);border-radius:var(--radius-xs);padding:5px 6px;font-size:10.5px;font-weight:650;
   cursor:pointer;font-family:inherit;transition:.13s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pt-box:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-soft);border-style:solid}
+.emoji-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:5px;
+  max-height:190px;overflow-y:auto;padding:8px;background:var(--surface-2);border-radius:var(--radius-sm);
+  border:1px solid var(--border)}
+.emoji-opt{font-size:20px;line-height:1;padding:7px 0;border:1.5px solid transparent;border-radius:var(--radius-xs);
+  background:transparent;cursor:pointer;transition:.12s;font-family:inherit}
+.emoji-opt:hover{background:var(--surface);border-color:var(--border-strong)}
+.emoji-opt.active{background:var(--primary-soft);border-color:var(--primary)}
+.thumb-sm{width:34px;height:34px;border-radius:8px;background:var(--surface-3);display:flex;
+  align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
 
 .cart{background:var(--surface);border-inline-start:1px solid var(--border);display:flex;
   flex-direction:column;height:calc(100vh - 67px)}
@@ -414,7 +423,21 @@ function hashPw(s){/* demo-grade only — client-side hashing is not real securi
 var DB={
   data:null,
   load:function(){try{this.data=JSON.parse(localStorage.getItem(STORE_KEY));}catch(e){this.data=null;}
-    if(!this.data){this.seed();}return this.data;},
+    if(!this.data){this.seed();}else{this.migrate();}return this.data;},
+  /* Bring an existing browser's data up to the current shape. Runs on every
+     load and only fills in what is missing, so it is safe to re-run. */
+  migrate:function(){var d=this.data,changed=false;
+    function def(o,k,v){if(o[k]===undefined){o[k]=v;changed=true;}}
+    (d.products||[]).forEach(function(p){
+      def(p,"units_per_box",0);def(p,"pack_name","Box");def(p,"box_barcode","");def(p,"box_price",0);
+      def(p,"emoji","");def(p,"image","");def(p,"tiers",[]);def(p,"batches",[]);
+    });
+    (d.sales||[]).forEach(function(s){(s.items||[]).forEach(function(it){
+      def(it,"pack_units",1);def(it,"pack_label","");});});
+    (d.movements||[]).forEach(function(m){def(m,"loss_value",0);});
+    def(d,"writeoffs",[]);def(d,"_held",[]);
+    if(!d.counters)d.counters={sale:0,purchase:0};
+    if(changed)this.save();},
   save:function(){localStorage.setItem(STORE_KEY,JSON.stringify(this.data));},
   reset:function(){localStorage.removeItem(STORE_KEY);this.data=null;this.seed();},
   nextId:function(coll){var arr=this.data[coll],m=0;for(var i=0;i<arr.length;i++)if(arr[i].id>m)m=arr[i].id;return m+1;},
@@ -576,11 +599,11 @@ function csvExport(filename,headers,rows){var lines=[headers.join(",")];
   setTimeout(function(){URL.revokeObjectURL(a.href);},2000);}
 
 /* ---------- Inventory helper (single source of truth) ------------------ */
-function adjustStock(productId,change,reason,note){
+function adjustStock(productId,change,reason,note,lossValue){
   var p=DB.data.products.filter(function(x){return x.id===productId;})[0];if(!p)return null;
-  p.quantity=(p.quantity||0)+change;
+  p.quantity=Math.round(((p.quantity||0)+change)*1000)/1000;
   DB.data.movements.unshift({id:DB.nextId("movements"),product_id:productId,product_name:p.name_en,
-    change_qty:change,balance:p.quantity,reason:reason,note:note||"",
+    change_qty:change,balance:p.quantity,reason:reason,note:note||"",loss_value:lossValue||0,
     user:SESSION.user?SESSION.user.username:"",created_at:new Date().toISOString()});
   return p.quantity;}
 
@@ -603,6 +626,75 @@ function fmtStock(p){var q=p.quantity||0;var u=p.units_per_box||0;
     return (b?b+" "+packName(p)+(b>1?"es":""):"")+(b&&r?" + ":"")+(r||!b?num(r,r%1?2:0)+" "+p.unit:"");}
   return num(q,q%1?2:0)+" "+p.unit;}
 function stockTitle(p){return hasBox(p)?(num(p.quantity,2)+" "+p.unit+" total · "+p.units_per_box+" "+p.unit+" per "+packName(p)):"";}
+
+/* ---------- Wholesale price tiers --------------------------------------
+   tiers = [{min_qty, price}] priced per piece. The best (lowest) qualifying
+   price wins, so "10+ at 8.00, 50+ at 7.00" behaves as expected. */
+function tierPrice(p,qty){
+  var best=null;(p.tiers||[]).forEach(function(t){
+    if(qty>=(t.min_qty||0)&&t.price>0&&(best===null||t.price<best))best=t.price;});
+  return best;}
+function effectiveUnitPrice(p,qty){var t=tierPrice(p,qty);
+  return (t!==null&&t<p.selling_price)?t:p.selling_price;}
+
+/* ---------- Batches & expiry (FEFO) ------------------------------------
+   Batches are an optional detail layer: product.quantity stays the single
+   total, while batches record where that stock came from and when it expires.
+   Stock is consumed First-Expired-First-Out. */
+function totalBatchQty(p){var n=0;(p.batches||[]).forEach(function(b){n+=b.qty||0;});return n;}
+function addBatch(p,qty,expiry,batchNo,cost){
+  if(!qty)return;p.batches=p.batches||[];
+  p.batches.push({id:"b"+Date.now()+Math.floor(Math.random()*1000),qty:qty,
+    expiry:expiry||"",batch_no:batchNo||"",cost:cost||p.purchase_price||0,
+    received_at:new Date().toISOString()});}
+/* Consume `qty` pieces FEFO. Batches with an expiry go first (soonest first),
+   then undated stock. Returns the batches touched, for the audit note. */
+function consumeBatches(p,qty){
+  if(!p.batches||!p.batches.length)return[];
+  var order=p.batches.slice().sort(function(a,b){
+    if(a.expiry&&b.expiry)return a.expiry<b.expiry?-1:1;
+    if(a.expiry)return -1;if(b.expiry)return 1;
+    return (a.received_at||"")<(b.received_at||"")?-1:1;});
+  var used=[],left=qty;
+  for(var i=0;i<order.length&&left>0;i++){var b=order[i];if(b.qty<=0)continue;
+    var take=Math.min(b.qty,left);b.qty=Math.round((b.qty-take)*1000)/1000;left-=take;
+    used.push({batch_no:b.batch_no,expiry:b.expiry,qty:take});}
+  p.batches=p.batches.filter(function(b){return b.qty>0.0001;});
+  return used;}
+function daysUntil(dateStr){if(!dateStr)return null;
+  var d=new Date(dateStr+"T00:00:00"),now=new Date();now.setHours(0,0,0,0);
+  return Math.round((d-now)/86400000);}
+/* Earliest expiry still in stock — drives the product-list warning. */
+function nextExpiry(p){var best=null;(p.batches||[]).forEach(function(b){
+    if(b.expiry&&b.qty>0&&(best===null||b.expiry<best))best=b.expiry;});
+  if(best===null&&p.expiry_date)best=p.expiry_date;return best;}
+function expiryState(p){var e=nextExpiry(p);if(!e)return null;
+  var d=daysUntil(e);if(d===null)return null;
+  return{date:e,days:d,status:d<0?"expired":(d<=7?"critical":(d<=30?"soon":"ok"))};}
+/* Pieces already expired — what a write-off would remove. */
+function expiredQty(p){var n=0;(p.batches||[]).forEach(function(b){
+    if(b.expiry&&b.qty>0&&daysUntil(b.expiry)<0)n+=b.qty;});return n;}
+
+/* ---------- Stock loss / write-off -------------------------------------
+   Damage, loss, expiry and theft remove stock AND book a monetary loss at
+   cost price, which flows into the financial reports and net profit. */
+var LOSS_REASONS={damage:"Damaged",expired:"Expired",loss:"Lost / stolen",breakage:"Breakage",sample:"Sample / staff use"};
+function writeOff(product,qty,reason,note){
+  qty=Math.abs(parseFloat(qty)||0);if(!qty)return null;
+  var cost=product.purchase_price||0;var value=Math.round(qty*cost*100)/100;
+  var used=consumeBatches(product,qty);
+  var detail=used.length?used.map(function(u){return u.qty+(u.expiry?("@"+u.expiry):"");}).join(", "):"";
+  adjustStock(product.id,-qty,reason,(note||LOSS_REASONS[reason]||reason)+(detail?(" ["+detail+"]"):""),value);
+  DB.data.writeoffs=DB.data.writeoffs||[];
+  DB.data.writeoffs.unshift({id:DB.nextId("writeoffs"),product_id:product.id,
+    product_name:product.name_en||product.name_ar,qty:qty,reason:reason,
+    cost_price:cost,loss_value:value,note:note||"",
+    user:SESSION.user?SESSION.user.username:"",created_at:new Date().toISOString()});
+  log("write_off","product",(LOSS_REASONS[reason]||reason)+" "+qty+" × "+(product.name_en||"")+" = "+value);
+  return value;}
+/* Total value written off in a period (used by reports + dashboard). */
+function shrinkageTotal(filterFn){var t=0;(DB.data.writeoffs||[]).forEach(function(w){
+    if(filterFn&&!filterFn(w))return;t+=w.loss_value||0;});return Math.round(t*100)/100;}
 
 /* ---------- Product search --------------------------------------------- */
 /* Resolve any scanned code: piece barcode, case barcode, or SKU. */
@@ -631,6 +723,7 @@ function serializeProduct(p){var d={};for(var k in p)d[k]=p[k];var sp=p.selling_
 
 /* ---------- Date/period analytics -------------------------------------- */
 function completedSales(){return DB.data.sales.filter(function(s){return s.status==="completed"||s.status==="partial_refund";});}
+/* Voided sales are excluded from every revenue figure by the filter above. */
 function inPeriod(iso,period){var d=new Date(iso);var now=new Date();
   var dd=dnorm(iso);var td=today();
   if(period==="today")return dd===td;
@@ -663,7 +756,9 @@ VIEWS.dashboard={title:function(){return t("nav.dashboard");},render:function(ro
   var periods=["today","week","month","quarter","half","year"];
   var plabels={today:"Today",week:"This Week",month:"This Month",quarter:"This Quarter",half:"Half Year",year:"This Year"};
   var sum={};periods.forEach(function(p){var m=salesMetrics(function(s){return inPeriod(s.created_at,p);});
-    m.expenses=expenseTotal(function(e){return inPeriod(e.spent_on,p);});m.net_profit=Math.round((m.gross_profit-m.expenses)*100)/100;sum[p]=m;});
+    m.expenses=expenseTotal(function(e){return inPeriod(e.spent_on,p);});
+    m.shrinkage=shrinkageTotal(function(w){return inPeriod(w.created_at,p);});
+    m.net_profit=Math.round((m.gross_profit-m.expenses-m.shrinkage)*100)/100;sum[p]=m;});
   var inv=inventoryValue();
   root.appendChild(el("div",{class:"grid stats-grid"},[
     statCard(t("dash.today_revenue"),money(sum.today.revenue),sum.today.orders+" orders","blue"),
@@ -753,13 +848,7 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
   document.addEventListener("keydown",window._posKey);
   function updateHeldLabel(){var n=(DB.data._held||[]).length;heldLabel.textContent="❚❚ "+t("pos.held")+(n?" ("+n+")":"");}
   var activeCat="";
-  function catEmoji(name){var n=(name||"").toLowerCase();
-    if(/bever|drink|boiss|مشروب/.test(n))return "🥤";if(/dairy|lait|حليب/.test(n))return "🥛";
-    if(/baker|pain|خبز/.test(n))return "🍞";if(/snack|chips/.test(n))return "🍿";
-    if(/clean|nettoy|تنظيف/.test(n))return "🧼";if(/cosmet|beauty/.test(n))return "💄";
-    if(/electro/.test(n))return "🔌";if(/phone|tele/.test(n))return "📱";
-    if(/cloth|vetement|ملابس/.test(n))return "👕";if(/fruit|veget|légume/.test(n))return "🥬";
-    if(/meat|viande|لحم/.test(n))return "🥩";return "📦";}
+  var catEmoji=catEmojiFor;
   function renderChips(){clear(chipRow);
     var cats=DB.data.categories.filter(function(c){
       return DB.data.products.some(function(p){return!p.archived&&p.category_id===c.id;});});
@@ -780,7 +869,7 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
       var tile=el("div",{class:"pos-tile",title:(p.name_en||p.name_ar)+(stockTitle(p)?("\n"+stockTitle(p)):""),
         onClick:function(){addToCart(p,false);}},[
         low?el("span",{class:"pt-low",title:"Low stock"}):null,
-        el("div",{class:"pt-thumb",text:catEmoji(cat?cat.name:"")}),
+        productThumb(p),
         el("div",{class:"pt-name",text:p.name_en||p.name_ar}),
         el("div",{class:"pt-price",text:money(p.selling_price)}),
         el("div",{class:"pt-stock",text:fmtStock(p)})]);
@@ -841,10 +930,10 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
     var line=state.cart.filter(function(l){return l.product_id===p.id&&l.pack_units===per;})[0];
     var used=cartPieces(p.id);
     if(used+per>p.quantity){toast("Not enough stock","error");return;}
-    if(line)line.quantity++;
+    if(line){line.quantity++;applyTier(line);}
     else state.cart.push({product_id:p.id,
       name:(p.name_en||p.name_ar)+(asBox?(" — "+packName(p)+" of "+per):""),
-      unit_price:asBox?boxPrice(p):p.selling_price,
+      unit_price:asBox?boxPrice(p):effectiveUnitPrice(p,1),
       purchase_price:asBox?boxCost(p):p.purchase_price,
       tax_rate:p.tax_rate,quantity:1,pack_units:per,pack_label:asBox?packName(p):"",
       stock:p.quantity,discount:0});
@@ -852,6 +941,15 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
   /* Pieces of a product already committed across all cart lines. */
   function cartPieces(pid,exceptLine){var n=0;state.cart.forEach(function(l){
     if(l.product_id===pid&&l!==exceptLine)n+=l.quantity*(l.pack_units||1);});return n;}
+  /* Re-price a piece line when its quantity crosses a wholesale break.
+     Cases are excluded — they already carry their own case price. */
+  function applyTier(line){
+    if(line.price_locked||(line.pack_units||1)>1||line.product_id==null)return;
+    var p=DB.data.products.filter(function(x){return x.id===line.product_id;})[0];
+    if(!p||!(p.tiers||[]).length)return;
+    var eff=effectiveUnitPrice(p,line.quantity);
+    line.unit_price=eff;
+    line.tier_applied=(eff<p.selling_price)?eff:null;}
   function renderCart(){clear(cartItems);
     if(!state.cart.length)cartItems.appendChild(el("div",{class:"cart-empty"},[
       el("span",{class:"ce-icon",text:"🛒"}),el("div",{text:t("pos.empty_cart")}),
@@ -862,20 +960,22 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
       qtyInp.addEventListener("change",function(){var v=parseFloat(qtyInp.value)||0;
         var room=Math.floor((l.stock-cartPieces(l.product_id,l))/per);
         if(v>room){v=room;toast("Only "+room+" "+(per>1?l.pack_label:"units")+" available","error");}
-        if(v<=0)state.cart.splice(idx,1);else l.quantity=v;renderCart();});
+        if(v<=0)state.cart.splice(idx,1);else{l.quantity=v;applyTier(l);}renderCart();});
       var priceCtrl;if(can("edit_price")){priceCtrl=el("input",{class:"cl-qty",type:"number",value:l.unit_price,step:"0.01",style:"width:70px"});
-        priceCtrl.addEventListener("change",function(){l.unit_price=parseFloat(priceCtrl.value)||0;renderCart();});}
+        priceCtrl.addEventListener("change",function(){l.unit_price=parseFloat(priceCtrl.value)||0;
+          l.price_locked=true;l.tier_applied=null;setTimeout(renderCart,0);});}
       else priceCtrl=el("span",{class:"muted",style:"font-size:12px",text:"× "+money(l.unit_price)});
       cartItems.appendChild(el("div",{class:"cart-line"},[el("div",{style:"min-width:0"},[
         el("div",{class:"cl-name",text:l.name}),
-        per>1?el("div",{class:"t-sub",text:num(l.quantity*per)+" "+"pcs · "+money(l.unit_price/per)+" each"}):null,
+        per>1?el("div",{class:"t-sub",text:num(l.quantity*per)+" pcs · "+money(l.unit_price/per)+" each"}):null,
+        l.tier_applied?el("div",{class:"t-sub"},[el("span",{class:"badge badge-green",text:"wholesale "+money(l.tier_applied)})]):null,
         el("div",{class:"cl-controls"},[el("button",{class:"qty-btn",text:"−",onClick:function(){chg(idx,-1);}}),qtyInp,
           el("button",{class:"qty-btn",text:"+",onClick:function(){chg(idx,1);}}),priceCtrl])]),
         el("div",{},[el("div",{class:"cl-total",text:money(lineTotal)}),el("div",{class:"cl-remove right",html:"🗑",onClick:function(){state.cart.splice(idx,1);renderCart();}})])]));});
     renderTotals();}
   function chg(idx,delta){var l=state.cart[idx];var per=l.pack_units||1;
     if(delta>0&&cartPieces(l.product_id)+per>l.stock){toast("Not enough stock","error");return;}
-    l.quantity+=delta;if(l.quantity<=0)state.cart.splice(idx,1);renderCart();}
+    l.quantity+=delta;if(l.quantity<=0)state.cart.splice(idx,1);else applyTier(l);renderCart();}
   function discountAmount(subtotal){return state.discount_pct?Math.round(subtotal*(state.discount||0)/100*100)/100:(state.discount||0);}
   function totals(){var subtotal=0,tax=0,cost=0;state.cart.forEach(function(l){var g=l.unit_price*l.quantity-l.discount;
     subtotal+=g;tax+=g*(l.tax_rate||0)/100;cost+=l.purchase_price*l.quantity;});
@@ -979,15 +1079,22 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
         purchase_price:l.purchase_price,discount:l.discount,tax_rate:l.tax_rate,
         pack_units:l.pack_units||1,pack_label:l.pack_label||"",
         line_total:Math.round((g+g*l.tax_rate/100)*100)/100,refunded_qty:0};});
+    var openReg=DB.data.registers.filter(function(x){return x.status==="open"&&x.user===SESSION.user.username;})[0];
     var sale={id:DB.nextId("sales"),receipt_no:rc,user:SESSION.user.username,customer_id:state.customer_id,
+      register_id:openReg?openReg.id:null,
       subtotal:Math.round(tot.subtotal*100)/100,discount:Math.round(tot.disc*100)/100,tax:Math.round(tot.tax*100)/100,
       total:Math.round(tot.total*100)/100,cost_total:Math.round(tot.cost*100)/100,profit:Math.round(tot.profit*100)/100,
       paid:Math.round(paid*100)/100,change_due:Math.round(Math.max(paid-tot.total,0)*100)/100,payment_method:method,
       payment_detail:detail||{},status:"completed",items:items,created_at:new Date().toISOString()};
     DB.data.sales.unshift(sale);
-    state.cart.forEach(function(l){if(l.product_id!=null)
-      adjustStock(l.product_id,-(l.quantity*(l.pack_units||1)),"sale",
-        rc+((l.pack_units||1)>1?(" ("+l.quantity+" "+l.pack_label+")"):""));});
+    state.cart.forEach(function(l){if(l.product_id==null)return;
+      var pieces=l.quantity*(l.pack_units||1);
+      var prod=DB.data.products.filter(function(x){return x.id===l.product_id;})[0];
+      /* Oldest / soonest-to-expire stock leaves the shelf first. */
+      var used=prod?consumeBatches(prod,pieces):[];
+      var tag=used.length?(" ["+used.map(function(u){return u.qty+(u.expiry?("@"+u.expiry):"");}).join(", ")+"]"):"";
+      adjustStock(l.product_id,-pieces,"sale",
+        rc+((l.pack_units||1)>1?(" ("+l.quantity+" "+l.pack_label+")"):"")+tag);});
     if(state.customer_id){var cust=DB.data.customers.filter(function(x){return x.id===state.customer_id;})[0];
       if(cust){if(method==="credit"&&paid<sale.total)cust.credit+=(sale.total-paid);cust.loyalty_pts+=Math.floor(sale.total);}}
     DB.save();log("sale","sale",rc+" total="+sale.total);
@@ -1058,6 +1165,111 @@ function printLabels(product,count){var st=DB.data.settings;var svg=code128SVG(p
     '.pr{font-size:13px;font-weight:bold}.nobc{color:#999;font-size:10px;padding:12px}svg{max-width:100%}'+
     '@media print{.lbl{border:none}}</style></head><body>'+all+
     '<script>window.onload=function(){window.print();}<\/script></body></html>');w.document.close();}
+
+/* ---- Product visuals -------------------------------------------------
+   A product shows its uploaded photo when it has one; otherwise a chosen
+   emoji stands in, falling back to one guessed from its category. Images are
+   downscaled to a small square data URL so many of them still fit in the
+   browser's storage quota. */
+var EMOJI_SET=("🥤 🧃 🍶 🥛 🍼 ☕ 🍵 🍺 🍷 💧 🍞 🥖 🥐 🧀 🥚 🍫 🍬 🍭 🍪 🍩 🎂 🍿 🥨 🥜 "+
+  "🍎 🍌 🍊 🍋 🍇 🍓 🍉 🍍 🥭 🥝 🍅 🥕 🥬 🥦 🌽 🥔 🧅 🧄 🥒 🌶 🍄 "+
+  "🥩 🍗 🍖 🐟 🦐 🥓 🌭 🍔 🍕 🍟 🥗 🍚 🍜 🍝 🥫 🧂 🧈 🍯 "+
+  "🧼 🧴 🧻 🧽 🪣 🧹 🪥 🪒 💊 🩹 🧷 👶 "+
+  "💄 💅 🧖 🪞 👕 👖 👗 👟 🧦 🧢 👜 ⌚ "+
+  "📱 💻 🔌 🔋 💡 🖥 🎧 📷 🕹 🔦 🪫 "+
+  "📦 🗃 🛒 🏷 ✏️ 📒 📎 🔧 🔨 🧰 🚬 ⚽").split(" ");
+function productEmoji(p){
+  if(p.emoji)return p.emoji;
+  var c=DB.data.categories.filter(function(x){return x.id===p.category_id;})[0];
+  return catEmojiFor(c?c.name:"");}
+function catEmojiFor(name){var n=(name||"").toLowerCase();
+  if(/bever|drink|boiss|مشروب/.test(n))return "🥤";if(/dairy|lait|حليب/.test(n))return "🥛";
+  if(/baker|pain|خبز/.test(n))return "🍞";if(/snack|chips/.test(n))return "🍿";
+  if(/clean|nettoy|تنظيف/.test(n))return "🧼";if(/cosmet|beauty/.test(n))return "💄";
+  if(/electro/.test(n))return "🔌";if(/phone|tele/.test(n))return "📱";
+  if(/cloth|vetement|ملابس/.test(n))return "👕";if(/fruit|veget|légume/.test(n))return "🥬";
+  if(/meat|viande|لحم/.test(n))return "🥩";return "📦";}
+/* Renders the thumbnail used on POS tiles and list rows. */
+function productThumb(p,cls){
+  if(p.image)return el("div",{class:cls||"pt-thumb",style:"background-image:url("+p.image+");background-size:cover;background-position:center"});
+  return el("div",{class:cls||"pt-thumb",text:productEmoji(p)});}
+/* Downscale an uploaded file into a square data URL (default 160px). */
+function fileToThumbDataURL(file,size,cb){
+  size=size||160;var reader=new FileReader();
+  reader.onload=function(){var img=new Image();
+    img.onload=function(){var c=document.createElement("canvas");c.width=c.height=size;
+      var ctx=c.getContext("2d");var s=Math.min(img.width,img.height);
+      ctx.drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,size,size);
+      cb(c.toDataURL("image/jpeg",0.78));};
+    img.onerror=function(){cb(null);};img.src=reader.result;};
+  reader.onerror=function(){cb(null);};reader.readAsDataURL(file);}
+/* Emoji + photo chooser used by the product form. */
+function imagePicker(product){
+  var state={emoji:product.emoji||"",image:product.image||""};
+  var preview=el("div",{class:"pt-thumb",style:"width:76px;height:76px;font-size:34px;flex-shrink:0"});
+  function paint(){clear(preview);preview.style.backgroundImage="";
+    if(state.image){preview.style.backgroundImage="url("+state.image+")";
+      preview.style.backgroundSize="cover";preview.style.backgroundPosition="center";}
+    else preview.textContent=state.emoji||productEmoji(product);}
+  paint();
+  var grid=el("div",{class:"emoji-grid"});
+  EMOJI_SET.forEach(function(e){grid.appendChild(el("button",{type:"button",
+    class:"emoji-opt"+(state.emoji===e?" active":""),text:e,onClick:function(){
+      state.emoji=(state.emoji===e)?"":e;
+      var opts=grid.querySelectorAll(".emoji-opt");
+      for(var i=0;i<opts.length;i++)opts[i].classList.toggle("active",opts[i].textContent===state.emoji);
+      paint();}}));});
+  var file=el("input",{type:"file",accept:"image/*",style:"display:none"});
+  file.addEventListener("change",function(){var f=file.files[0];if(!f)return;
+    fileToThumbDataURL(f,160,function(url){if(!url){toast("Could not read that image","error");return;}
+      state.image=url;paint();});});
+  var body=el("div",{},[
+    el("div",{class:"flex mb",style:"align-items:flex-start"},[preview,
+      el("div",{style:"flex:1"},[
+        el("div",{class:"hint mb",text:"Pick an emoji as a placeholder now, and upload a real photo whenever you have one."}),
+        el("div",{class:"flex",style:"flex-wrap:wrap"},[
+          el("button",{type:"button",class:"btn btn-sm btn-soft",text:"📷 Upload photo",onClick:function(){file.click();}}),
+          el("button",{type:"button",class:"btn btn-sm btn-ghost",text:"Remove photo",onClick:function(){state.image="";paint();}}),
+          el("button",{type:"button",class:"btn btn-sm btn-ghost",text:"Clear emoji",onClick:function(){state.emoji="";
+            var opts=grid.querySelectorAll(".emoji-opt");for(var i=0;i<opts.length;i++)opts[i].classList.remove("active");
+            paint();}}),file])])]),
+    grid]);
+  return{node:body,values:function(){return{emoji:state.emoji,image:state.image};}};}
+
+/* ---- Write-off dialog -------------------------------------------------
+   Removes stock and books the loss at cost price. Shared by the Products
+   list and the Inventory screen. */
+function writeOffModal(product,onDone){
+  var p=DB.data.products.filter(function(x){return x.id===product.id;})[0]||product;
+  var expired=expiredQty(p);
+  var qty=el("input",{type:"number",step:"any",value:expired>0?expired:1});
+  var reason=el("select",{},Object.keys(LOSS_REASONS).map(function(k){return el("option",{value:k},LOSS_REASONS[k]);}));
+  if(expired>0)reason.value="expired";
+  var note=el("input",{placeholder:"Note (optional)"});
+  var lossEl=el("div",{class:"stat-value down"});
+  function upd(){var q=parseFloat(qty.value)||0;
+    lossEl.textContent=money(q*(p.purchase_price||0));}
+  qty.addEventListener("input",upd);upd();
+  var body=el("div",{},[
+    el("div",{class:"flex mb"},[productThumb(p,"thumb-sm"),
+      el("div",{},[el("div",{class:"t-main",text:p.name_en||p.name_ar}),
+        el("div",{class:"t-sub",text:"In stock: "+fmtStock(p)+" · cost "+money(p.purchase_price||0)+" each"})])]),
+    expired>0?el("div",{class:"banner banner-warn",text:"⚠ "+num(expired,2)+" pieces are already past their expiry date."}):null,
+    el("div",{class:"form-grid"},[
+      el("div",{class:"field"},[el("label",{text:"Quantity to remove"}),qty]),
+      el("div",{class:"field"},[el("label",{text:"Reason"}),reason])]),
+    el("div",{class:"field mt"},[el("label",{text:"Note"}),note]),
+    el("div",{class:"stat mt",style:"text-align:center"},[
+      el("div",{class:"stat-label",text:"Loss recorded at cost price"}),lossEl])]);
+  modal("🗑️ Write off stock",body,[{label:t("common.cancel"),class:"btn-ghost"},
+    {label:"Write off",class:"btn-danger",onClick:function(){
+      var q=parseFloat(qty.value)||0;
+      if(q<=0){toast("Enter a quantity","error");return false;}
+      if(q>p.quantity){toast("Only "+num(p.quantity,2)+" in stock","error");return false;}
+      var val=writeOff(p,q,reason.value,note.value);
+      DB.save();refreshNavBadges();
+      toast("Wrote off "+num(q,2)+" × "+(p.name_en||p.name_ar)+" · loss "+money(val),"success");
+      if(onDone)onDone();}}]);}
 
 /* ---- Quick add: scan an unknown barcode, fill name + quantity, done -------
    Shared by the POS (scanning something not in the catalog) and the Products
@@ -1196,7 +1408,14 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
       return true;}).map(serializeProduct);}
   function load(){var rows=filtered();clear(listHolder);
     listHolder.appendChild(table([
-      {key:"name",label:t("common.name"),render:function(r){return "<div class='t-main'>"+esc(r.name_en||r.name_ar)+"</div><div class='t-sub'>"+(r.barcode?esc(r.barcode):"no barcode")+(r.sku?" · "+esc(r.sku):"")+"</div>";}},
+      {key:"name",label:t("common.name"),render:function(r){
+        var ex=expiryState(r);
+        var meta=(r.barcode?esc(r.barcode):"no barcode")+(r.sku?" · "+esc(r.sku):"");
+        var chip=ex?(" "+badge(ex.status==="expired"?("expired "+Math.abs(ex.days)+"d"):(ex.days+"d to expiry"),
+          ex.status==="expired"?"red":(ex.status==="critical"?"orange":"gray"))):"";
+        return el("div",{class:"flex"},[productThumb(r,"thumb-sm"),
+          el("div",{style:"min-width:0"},[el("div",{class:"t-main",text:r.name_en||r.name_ar}),
+            el("div",{class:"t-sub",html:meta+chip})])]);}},
       {key:"category_name",label:t("prod.category"),render:function(r){return r.category_name?badge(r.category_name,"gray"):"—";}},
       {key:"purchase_price",label:t("prod.cost"),num:true,render:function(r){return money(r.purchase_price);}},
       {key:"selling_price",label:t("prod.price"),num:true,render:function(r){return money(r.selling_price);}},
@@ -1209,6 +1428,7 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
           w.appendChild(iconAction("📋","Duplicate",function(){dup(r);}));
           w.appendChild(iconAction("🏷","Print label",function(){labelModal(r);}));
           w.appendChild(iconAction("📜","History",function(){historyModal(r);}));
+          w.appendChild(iconAction("🗑️","Write off damaged / expired stock",function(){writeOffModal(r,load);}));
           if(r.archived)w.appendChild(iconAction("♻️","Restore",function(){setArch(r.id,0);}));
           else w.appendChild(iconAction("🗑","Archive",function(){confirmModal("Archive '"+(r.name_en||r.name_ar)+"'?",function(){setArch(r.id,1);});}));}
         return w;}}],rows,{empty:"No products"}));}
@@ -1245,9 +1465,22 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
     {name:"units_per_box",label:"Pieces per case (0 = none)",type:"number",step:"1"},
     {name:"box_barcode",label:"Case barcode (outer carton)"},
     {name:"box_price",label:"Case price (0 = pieces × price)",type:"number",step:"0.01"},
-    {name:"expiry_date",label:"Expiry Date",type:"date"},{name:"batch_number",label:"Batch Number"},
+    {name:"expiry_date",label:"Expiry Date (simple)",type:"date"},{name:"batch_number",label:"Batch Number"},
     {name:"notes",label:"Notes",type:"textarea",full:true}],r||{});
-    modal(r?t("common.edit"):t("common.add"),form.node,[{label:t("common.cancel"),class:"btn-ghost"},
+    var picker=imagePicker(r||{});
+    var tiers=tierEditor(r||{});
+    /* Tabbed body keeps the form readable now that it covers a lot of ground. */
+    var panes={details:form.node,image:picker.node,pricing:tiers.node};
+    if(r)panes.batches=batchEditor(DB.data.products.filter(function(x){return x.id===r.id;})[0]).node;
+    var labels={details:"📝 Details",image:"🖼 Image",pricing:"💰 Wholesale",batches:"📅 Batches & expiry"};
+    var paneBox=el("div",{});
+    var tabsEl=el("div",{class:"tabs"},Object.keys(panes).map(function(k,i){
+      return el("div",{class:"tab"+(i===0?" active":""),text:labels[k],onClick:function(e){
+        var ts=tabsEl.querySelectorAll(".tab");for(var j=0;j<ts.length;j++)ts[j].classList.remove("active");
+        e.target.classList.add("active");clear(paneBox);paneBox.appendChild(panes[k]);}});}));
+    paneBox.appendChild(panes.details);
+    var bodyNode=el("div",{},[tabsEl,paneBox]);
+    modal(r?t("common.edit"):t("common.add"),bodyNode,[{label:t("common.cancel"),class:"btn-ghost"},
       {label:t("common.save"),class:"btn-primary",onClick:function(){var v=form.values();
         if(!(v.name_en||v.name_ar||v.name_fr)){toast("A product name is required","error");return false;}
         ["category_id","brand_id","supplier_id"].forEach(function(k){v[k]=v[k]?parseInt(v[k]):null;});
@@ -1259,12 +1492,64 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
         if(v.barcode&&v.box_barcode&&v.barcode===v.box_barcode){toast("Piece and case barcodes must differ","error");return false;}
         v.units_per_box=Math.max(0,Math.round(parseFloat(v.units_per_box)||0));
         v.search_blob=searchBlob(v.name_en,v.name_ar,v.name_fr,v.sku,v.barcode,v.box_barcode);
+        var pics=picker.values();v.emoji=pics.emoji;v.image=pics.image;
+        v.tiers=tiers.values();
         if(r){var p=DB.data.products.filter(function(x){return x.id===r.id;})[0];var oldQ=p.quantity;
           for(var k in v)p[k]=v[k];if(v.quantity!==oldQ)adjustStock(r.id,v.quantity-oldQ,"adjustment","Manual edit");
           log("update_product","product",r.id);}
-        else{v.id=DB.nextId("products");v.archived=0;v.created_at=new Date().toISOString();DB.data.products.push(v);
+        else{v.id=DB.nextId("products");v.archived=0;v.batches=[];v.created_at=new Date().toISOString();DB.data.products.push(v);
           if(v.quantity)adjustStock(v.id,v.quantity,"initial","Initial stock");log("create_product","product",v.id);}
         DB.save();toast("Saved","success");load();}}],{large:true});}
+  /* Wholesale tier editor: "buy N or more, pay this per piece". */
+  function tierEditor(product){
+    var rows=(product.tiers||[]).slice();
+    var list=el("div",{});
+    function draw(){clear(list);
+      if(!rows.length)list.appendChild(el("div",{class:"hint",text:"No wholesale prices — everyone pays the normal price."}));
+      rows.forEach(function(tr,i){
+        var q=el("input",{type:"number",step:"1",value:tr.min_qty,style:"width:90px"});
+        var pr=el("input",{type:"number",step:"0.01",value:tr.price,style:"width:110px"});
+        q.addEventListener("change",function(){tr.min_qty=parseFloat(q.value)||0;});
+        pr.addEventListener("change",function(){tr.price=parseFloat(pr.value)||0;});
+        list.appendChild(el("div",{class:"flex",style:"margin-bottom:8px"},[
+          el("span",{class:"hint",text:"Buy"}),q,el("span",{class:"hint",text:"or more →"}),pr,
+          el("span",{class:"hint",text:"each"}),
+          el("button",{type:"button",class:"btn btn-sm btn-danger",text:"×",
+            onClick:function(){rows.splice(i,1);draw();}})]));});}
+    draw();
+    var node=el("div",{},[list,el("button",{type:"button",class:"btn btn-sm btn-ghost mt",text:"+ Add price break",
+      onClick:function(){rows.push({min_qty:10,price:product.selling_price||0});draw();}})]);
+    return{node:node,values:function(){return rows.filter(function(x){return x.min_qty>0&&x.price>0;});}};}
+  /* Batch/expiry editor — each batch is a delivery with its own expiry date. */
+  function batchEditor(product){
+    var list=el("div",{});
+    function draw(){clear(list);
+      var bs=(product.batches||[]).slice().sort(function(a,b){return (a.expiry||"9999")<(b.expiry||"9999")?-1:1;});
+      if(!bs.length){list.appendChild(el("div",{class:"hint",text:"No batches tracked. Add one to follow expiry dates for this product."}));return;}
+      list.appendChild(table([
+        {key:"expiry",label:"Expiry",render:function(b){if(!b.expiry)return "<span class='muted'>—</span>";
+          var d=daysUntil(b.expiry);
+          return esc(b.expiry)+" "+badge(d<0?("expired "+Math.abs(d)+"d"):(d+"d left"),d<0?"red":(d<=7?"orange":"green"));}},
+        {key:"batch_no",label:"Batch",render:function(b){return esc(b.batch_no||"—");}},
+        {key:"qty",label:"Qty",num:true,render:function(b){return num(b.qty,2);}},
+        {key:"x",label:"",num:true,render:function(b){return el("button",{type:"button",class:"btn btn-sm btn-danger",text:"×",
+          onClick:function(){confirmModal("Remove this batch? Stock will be reduced by "+num(b.qty,2)+".",function(){
+            adjustStock(product.id,-b.qty,"adjustment","Batch removed"+(b.batch_no?(" "+b.batch_no):""));
+            product.batches=product.batches.filter(function(x){return x.id!==b.id;});
+            DB.save();draw();load();});}});}}],bs));}
+    draw();
+    var qty=el("input",{type:"number",step:"any",placeholder:"Qty",style:"width:100px"});
+    var exp=el("input",{type:"date",style:"width:auto"});
+    var bno=el("input",{placeholder:"Batch no. (optional)",style:"width:auto"});
+    var node=el("div",{},[list,
+      el("div",{class:"flex mt",style:"flex-wrap:wrap"},[qty,exp,bno,
+        el("button",{type:"button",class:"btn btn-sm btn-primary",text:"+ Add batch",onClick:function(){
+          var q=parseFloat(qty.value)||0;if(q<=0){toast("Enter a quantity","error");return;}
+          addBatch(product,q,exp.value,bno.value,product.purchase_price);
+          adjustStock(product.id,q,"purchase","Batch added"+(exp.value?(" exp "+exp.value):""));
+          DB.save();qty.value="";bno.value="";draw();load();toast("Batch added","success");}})]),
+      el("div",{class:"hint mt",text:"Sales always take the soonest-to-expire batch first (FEFO)."})]);
+    return{node:node};}
   function historyModal(r){var mv=DB.data.movements.filter(function(m){return m.product_id===r.id;}).slice(0,200);
     modal("History · "+(r.name_en||r.name_ar),table([{key:"created_at",label:t("common.date"),render:function(x){return fmtDate(x.created_at);}},
       {key:"reason",label:"Reason"},{key:"change_qty",label:"Change",num:true,render:function(x){return(x.change_qty>0?"+":"")+num(x.change_qty,2);}},
@@ -1296,12 +1581,58 @@ VIEWS.inventory={title:function(){return t("nav.inventory");},render:function(ro
     statCard("Inventory (retail)",money(val.retail_value),num(val.total_units)+" units","green"),
     statCard("Potential profit",money(val.retail_value-val.cost_value),"","orange")]));
   var active="alerts";var body=el("div",{});
-  var tabBar=el("div",{class:"tabs"},[tab("alerts","Alerts"),tab("adjust","Adjust Stock"),tab("movements","Movements"),tab("count","Count Session")]);
+  var tabBar=el("div",{class:"tabs"},[tab("alerts","Alerts"),tab("expiry","📅 Expiry"),tab("losses","🗑️ Losses"),
+    tab("adjust","Adjust Stock"),tab("movements","Movements"),tab("count","Count Session")]);
   root.appendChild(tabBar);root.appendChild(body);
   function tab(id,label){return el("div",{class:"tab"+(id===active?" active":""),text:label,onClick:function(e){active=id;
     var ts=tabBar.querySelectorAll(".tab");for(var i=0;i<ts.length;i++)ts[i].classList.remove("active");e.target.classList.add("active");draw();}});}
   draw();
-  function draw(){clear(body);if(active==="alerts")alerts();else if(active==="adjust")adjust();else if(active==="movements")moves();else count();}
+  function draw(){clear(body);
+    if(active==="alerts")alerts();else if(active==="expiry")expiryTab();else if(active==="losses")lossesTab();
+    else if(active==="adjust")adjust();else if(active==="movements")moves();else count();}
+  /* Everything with a dated batch, soonest first, with one-click write-off. */
+  function expiryTab(){
+    var rows=[];
+    DB.data.products.forEach(function(p){if(p.archived)return;
+      var st=expiryState(p);if(!st)return;
+      rows.push({p:p,date:st.date,days:st.days,status:st.status,
+        qty:(p.batches||[]).length?expiredQty(p)||totalBatchQty(p):p.quantity});});
+    rows.sort(function(a,b){return a.days-b.days;});
+    var expiredVal=0;rows.forEach(function(r){if(r.days<0)expiredVal+=expiredQty(r.p)*(r.p.purchase_price||0);});
+    body.appendChild(el("div",{class:"grid stats-grid mb"},[
+      statCard("Expired now",String(rows.filter(function(r){return r.days<0;}).length),"products","red","⛔"),
+      statCard("Expiring in 7 days",String(rows.filter(function(r){return r.days>=0&&r.days<=7;}).length),"products","orange","⏳"),
+      statCard("Value at risk",money(expiredVal),"expired stock at cost","red","💸")]));
+    body.appendChild(el("div",{class:"card"},[el("h3",{class:"mb",text:"Expiry watch"}),
+      table([
+        {key:"name",label:t("common.name"),render:function(r){return el("div",{class:"flex"},[productThumb(r.p,"thumb-sm"),
+          el("div",{},[el("div",{class:"t-main",text:r.p.name_en||r.p.name_ar}),
+            el("div",{class:"t-sub",text:fmtStock(r.p)})])]);}},
+        {key:"date",label:"Expiry"},
+        {key:"days",label:"Status",render:function(r){return badge(r.days<0?("expired "+Math.abs(r.days)+"d ago"):(r.days+" days left"),
+          r.days<0?"red":(r.days<=7?"orange":(r.days<=30?"blue":"green")));}},
+        {key:"act",label:"",num:true,render:function(r){return el("button",{class:"btn btn-sm btn-danger",
+          text:"Write off",onClick:function(){writeOffModal(r.p,draw);}});}}],rows,{empty:"Nothing with an expiry date yet"})]));}
+  /* Ledger of everything written off, valued at cost. */
+  function lossesTab(){
+    var ws=(DB.data.writeoffs||[]).slice(0,300);
+    var total=shrinkageTotal();
+    var month=shrinkageTotal(function(w){return inPeriod(w.created_at,"month");});
+    body.appendChild(el("div",{class:"grid stats-grid mb"},[
+      statCard("Losses this month",money(month),"at cost price","red","🗑️"),
+      statCard("Losses all time",money(total),String(ws.length)+" write-offs","orange","📉")]));
+    body.appendChild(el("div",{class:"toolbar"},[el("span",{class:"spacer"}),
+      el("button",{class:"btn btn-ghost btn-sm",text:"⬇ CSV",onClick:function(){
+        csvExport("stock_losses.csv",["date","product","qty","reason","cost_price","loss_value","note","user"],
+          ws.map(function(w){return[dnorm(w.created_at),w.product_name,w.qty,LOSS_REASONS[w.reason]||w.reason,w.cost_price,w.loss_value,w.note,w.user];}));}})]));
+    body.appendChild(table([
+      {key:"created_at",label:t("common.date"),render:function(w){return fmtDate(w.created_at);}},
+      {key:"product_name",label:"Product"},
+      {key:"qty",label:"Qty",num:true,render:function(w){return num(w.qty,2);}},
+      {key:"reason",label:"Reason",render:function(w){return badge(LOSS_REASONS[w.reason]||w.reason,"red");}},
+      {key:"cost_price",label:"Cost each",num:true,render:function(w){return money(w.cost_price);}},
+      {key:"loss_value",label:"Loss",num:true,render:function(w){return "<strong class='down'>"+money(w.loss_value)+"</strong>";}},
+      {key:"note",label:"Note"},{key:"user",label:"By"}],ws,{empty:"No stock has been written off"}));}
   function alerts(){var low=DB.data.products.filter(function(p){return!p.archived&&p.min_stock>0&&p.quantity<=p.min_stock;});
     var out=DB.data.products.filter(function(p){return!p.archived&&p.quantity<=0;});
     var exp=DB.data.products.filter(function(p){return!p.archived&&p.expiry_date&&dnorm(p.expiry_date)<=new Date(Date.now()+30*864e5).toISOString().slice(0,10);});
@@ -1556,6 +1887,22 @@ VIEWS.register={title:function(){return t("nav.register");},render:function(root
       el("button",{class:"btn btn-danger btn-block",text:"Close Register",onClick:function(){var c=parseFloat(counted.value)||0;var diff=Math.round((c-expected)*100)/100;
         open.status="closed";open.counted_cash=c;open.closing_cash=c;open.expected_cash=Math.round(expected*100)/100;open.difference=diff;open.closed_at=new Date().toISOString();
         DB.save();log("close_register","register","difference="+diff);toast("Closed. Difference: "+money(diff),diff===0?"success":"error");VIEWS.register.render(root);}})]));}
+  /* Day-end Z-report */
+  var z=zReportData(today());
+  var zCard=el("div",{class:"card mt"},[
+    el("div",{class:"section-head"},[el("h3",{text:"📋 Z-Report — day end ("+z.day+")"}),
+      el("button",{class:"btn btn-primary",text:"🖨 Print Z-Report",onClick:function(){printZReport(zReportData(today()));}})]),
+    el("div",{class:"grid stats-grid mb"},[
+      statCard("Transactions",num(z.count),z.voided?(z.voided+" voided"):"","blue","🧾"),
+      statCard("Gross sales",money(z.gross),"Tax "+money(z.tax),"green","💵"),
+      statCard("Cash expected",money(z.cashSales),"cash + mixed","orange","💰"),
+      statCard("Net profit",money(z.net),"after expenses & losses","green","📈")]),
+    table([{key:"k",label:"Line"},{key:"v",label:"Amount",num:true}],
+      [["Gross sales",money(z.gross)],["Discounts given",money(z.discount)],["Refunds",money(z.refunded)],
+       ["Cost of goods",money(z.cost)],["Gross profit",money(z.profit)],["Expenses today",money(z.expenses)],
+       ["Stock losses today",money(z.losses)],["NET PROFIT",money(z.net)]]
+      .map(function(x){return{k:x[0],v:x[1]};}))]);
+  root.appendChild(zCard);
   root.appendChild(el("div",{class:"card mt"},[el("h3",{class:"mb",text:"Register History"}),
     table([{key:"opened_at",label:"Opened",render:function(x){return fmtDate(x.opened_at);}},{key:"closed_at",label:"Closed",render:function(x){return x.closed_at?fmtDate(x.closed_at):"—";}},{key:"user",label:"By"},
       {key:"opening_cash",label:"Opening",num:true,render:function(x){return money(x.opening_cash);}},
@@ -1563,6 +1910,66 @@ VIEWS.register={title:function(){return t("nav.register");},render:function(root
       {key:"difference",label:"Difference",num:true,render:function(x){return x.difference!=null?"<span class='"+(x.difference==0?"":(x.difference>0?"up":"down"))+"'>"+money(x.difference)+"</span>":"—";}},
       {key:"status",label:"Status",render:function(x){return badge(x.status,x.status==="open"?"green":"gray");}}],DB.data.registers.slice(0,100),{empty:"No history"})]));
 }};
+/* ---- Z-Report: the day-end close a shop actually prints ---------------- */
+function zReportData(dayISO,registerId){
+  var day=dayISO||today();
+  var sales=DB.data.sales.filter(function(s){return dnorm(s.created_at)===day&&
+    (registerId==null||s.register_id===registerId);});
+  var live=sales.filter(function(s){return s.status!=="voided";});
+  var voided=sales.filter(function(s){return s.status==="voided";});
+  var byMethod={},gross=0,tax=0,disc=0,cost=0,profit=0,items=0;
+  live.forEach(function(s){
+    byMethod[s.payment_method]=(byMethod[s.payment_method]||0)+s.total;
+    gross+=s.total;tax+=s.tax;disc+=s.discount;cost+=s.cost_total;profit+=s.profit;
+    (s.items||[]).forEach(function(it){items+=it.quantity*(it.pack_units||1);});});
+  var refunded=0;live.forEach(function(s){(s.items||[]).forEach(function(it){
+    if(it.refunded_qty>0&&it.quantity)refunded+=it.line_total*(it.refunded_qty/it.quantity);});});
+  var expenses=DB.data.expenses.filter(function(e){return e.spent_on===day;});
+  var expTotal=expenses.reduce(function(a,e){return a+e.amount;},0);
+  var losses=(DB.data.writeoffs||[]).filter(function(w){return dnorm(w.created_at)===day;});
+  var lossTotal=losses.reduce(function(a,w){return a+w.loss_value;},0);
+  var top={};live.forEach(function(s){(s.items||[]).forEach(function(it){
+    top[it.name]=top[it.name]||{name:it.name,qty:0,total:0};
+    top[it.name].qty+=it.quantity*(it.pack_units||1);top[it.name].total+=it.line_total;});});
+  var topList=Object.keys(top).map(function(k){return top[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,10);
+  var regs=DB.data.registers.filter(function(r){return dnorm(r.opened_at)===day;});
+  var cashSales=(byMethod.cash||0)+(byMethod.mixed||0);
+  return{day:day,count:live.length,voided:voided.length,gross:round2(gross),tax:round2(tax),
+    discount:round2(disc),cost:round2(cost),profit:round2(profit),items:round2(items),
+    refunded:round2(refunded),byMethod:byMethod,cashSales:round2(cashSales),
+    expenses:round2(expTotal),expenseList:expenses,losses:round2(lossTotal),lossList:losses,
+    net:round2(profit-expTotal-lossTotal),top:topList,registers:regs};}
+function round2(n){return Math.round((n||0)*100)/100;}
+function printZReport(z){
+  var st=DB.data.settings;var w=window.open("","_blank");
+  if(!w){toast("Allow pop-ups to print the report","error");return;}
+  function row(l,v,b){return "<tr"+(b?" class='b'":"")+"><td>"+esc(l)+"</td><td class='r'>"+esc(v)+"</td></tr>";}
+  var methods=Object.keys(z.byMethod).map(function(m){return row(m.charAt(0).toUpperCase()+m.slice(1),money(z.byMethod[m]));}).join("");
+  var regRows=z.registers.map(function(r){return row((r.user||"")+" · "+(r.status==="closed"?"closed":"open"),
+    r.difference!=null?("diff "+money(r.difference)):"—");}).join("");
+  var topRows=z.top.map(function(tp){return "<tr><td>"+esc(tp.name)+"</td><td class='r'>"+num(tp.qty,2)+"</td><td class='r'>"+money(tp.total)+"</td></tr>";}).join("");
+  w.document.write("<html><head><title>Z-Report "+esc(z.day)+"</title><style>"+
+    "body{font-family:ui-monospace,monospace;max-width:400px;margin:20px auto;padding:16px;font-size:12px}"+
+    "h1{font-size:16px;text-align:center;margin:0}h2{font-size:12px;margin:14px 0 4px;border-bottom:1px solid #000;padding-bottom:2px}"+
+    "table{width:100%;border-collapse:collapse}td{padding:2px 0}.r{text-align:right}"+
+    ".b{font-weight:bold;font-size:13px}.c{text-align:center}.sep{border-top:1px dashed #999;margin:8px 0}</style></head><body>"+
+    "<h1>"+esc(st.store_name||"KAKA POS")+"</h1><div class='c'>Z-REPORT — DAY END</div>"+
+    "<div class='c'>"+esc(z.day)+" · printed "+new Date().toLocaleString()+"</div>"+
+    "<h2>SALES</h2><table>"+
+    row("Transactions",String(z.count))+row("Items sold",num(z.items,2))+
+    row("Gross sales",money(z.gross))+row("Discounts",money(z.discount))+
+    row("Tax collected",money(z.tax))+row("Refunds",money(z.refunded))+
+    row("Voided sales",String(z.voided))+
+    "</table><h2>PAYMENTS</h2><table>"+methods+row("Cash expected in drawer",money(z.cashSales),true)+"</table>"+
+    (regRows?("<h2>REGISTERS</h2><table>"+regRows+"</table>"):"")+
+    "<h2>PROFIT</h2><table>"+row("Cost of goods",money(z.cost))+row("Gross profit",money(z.profit))+
+    row("Expenses",money(z.expenses))+row("Stock losses",money(z.losses))+
+    row("NET PROFIT",money(z.net),true)+"</table>"+
+    (topRows?("<h2>TOP ITEMS</h2><table>"+topRows+"</table>"):"")+
+    "<div class='sep'></div><div class='c'>Cashier sign: ____________</div>"+
+    "<script>window.onload=function(){window.print();}<\/script></body></html>");
+  w.document.close();}
+
 VIEWS.zakat={title:function(){return t("nav.zakat");},render:function(root){
   clear(root);var inv=inventoryValue();var receivables=0;DB.data.customers.forEach(function(c){receivables+=c.credit||0;});
   var cash=0;DB.data.registers.forEach(function(r){if(r.status==="open")cash+=r.opening_cash;});
@@ -1644,13 +2051,24 @@ VIEWS.reports={title:function(){return t("nav.reports");},render:function(root){
   function finR(){var sales=salesMetrics(function(s){return inRange(s.created_at);});var exp=expenseTotal(function(e){return inRange(e.spent_on);});
     var byCat={};DB.data.expenses.forEach(function(e){if(!inRange(e.spent_on))return;byCat[e.category]=(byCat[e.category]||0)+e.amount;});
     var catRows=Object.keys(byCat).map(function(k){return{category:k,total:byCat[k]};}).sort(function(a,b){return b.total-a.total;});
-    var net=sales.gross_profit-exp;
+    var shrink=shrinkageTotal(function(w){return inRange(w.created_at);});
+    var net=sales.gross_profit-exp-shrink;
     body.appendChild(el("div",{class:"grid stats-grid"},[statCard("Revenue",money(sales.revenue),"","blue"),statCard("Cost of Goods",money(sales.cost),"","orange"),
       statCard("Gross Profit",money(sales.gross_profit),"","green"),statCard("Expenses",money(exp),"","red"),
-      statCard("Tax Collected",money(sales.tax),"","blue"),statCard("Net Profit",money(Math.round(net*100)/100),"","green")]));
+      statCard("Stock losses",money(shrink),"Damage / expiry / theft","red","🗑"),
+      statCard("Net Profit",money(Math.round(net*100)/100),"After expenses & losses","green")]));
     body.appendChild(el("div",{class:"card mt"},[el("h3",{class:"mb",text:"Expenses by Category"}),
       table([{key:"category",label:"Category"},{key:"total",label:"Total",num:true,render:function(r){return money(r.total);}}],catRows,{empty:"No expenses"})]));
-    setExport(["Metric","Amount"],[["Revenue",sales.revenue],["Cost of Goods",sales.cost],["Gross Profit",sales.gross_profit],["Expenses",exp],["Net Profit",Math.round(net*100)/100]]);}
+    /* Losses broken down by reason, valued at cost. */
+    var byReason={};(DB.data.writeoffs||[]).forEach(function(w){if(!inRange(w.created_at))return;
+      byReason[w.reason]=byReason[w.reason]||{reason:LOSS_REASONS[w.reason]||w.reason,qty:0,value:0};
+      byReason[w.reason].qty+=w.qty;byReason[w.reason].value+=w.loss_value;});
+    var lossRows=Object.keys(byReason).map(function(k){return byReason[k];}).sort(function(a,b){return b.value-a.value;});
+    body.appendChild(el("div",{class:"card mt"},[el("h3",{class:"mb",text:"Stock Losses by Reason"}),
+      table([{key:"reason",label:"Reason"},{key:"qty",label:"Units",num:true,render:function(r){return num(r.qty,2);}},
+        {key:"value",label:"Loss at cost",num:true,render:function(r){return money(r.value);}}],lossRows,{empty:"No losses recorded"})]));
+    setExport(["Metric","Amount"],[["Revenue",sales.revenue],["Cost of Goods",sales.cost],["Gross Profit",sales.gross_profit],
+      ["Expenses",exp],["Stock losses",shrink],["Net Profit",Math.round(net*100)/100]]);}
   function supR(){var rows=DB.data.suppliers.filter(function(s){return s.active;}).map(function(s){var orders=DB.data.purchases.filter(function(p){return p.supplier_id===s.id;});
     return{name:s.company_name,phone1:s.phone1,balance:s.balance,orders:orders.length,purchased:orders.reduce(function(a,p){return a+p.total;},0)};}).sort(function(a,b){return b.balance-a.balance;});
     body.appendChild(table([{key:"name",label:"Supplier"},{key:"phone1",label:"Phone"},{key:"orders",label:"Orders",num:true},
@@ -1680,10 +2098,69 @@ VIEWS.history={title:function(){return t("nav.history");},render:function(root){
       {key:"customer",label:"Customer",render:function(r){return custName(r.customer_id);}},
       {key:"total",label:"Total",num:true,render:function(r){return money(r.total);}},
       {key:"payment_method",label:"Payment",render:function(r){return badge(r.payment_method,"blue");}},
-      {key:"status",label:"Status",render:function(r){return badge(r.status,r.status==="completed"?"green":(r.status==="refunded"?"red":"orange"));}},
+      {key:"status",label:"Status",render:function(r){return badge(r.status,r.status==="completed"?"green":
+        (r.status==="refunded"||r.status==="voided"?"red":"orange"))+(r.status==="voided"&&r.void_note?("<div class='t-sub'>"+esc(r.void_note)+"</div>"):"");}},
       {key:"act",label:"",num:true,render:function(r){var w=el("div",{class:"flex",style:"justify-content:flex-end"});
         w.appendChild(iconAction("🖨","Reprint",function(){printReceipt(r);}));
-        if(can("refund")&&r.status==="completed")w.appendChild(iconAction("↩️","Refund",function(){refundModal(r);}));return w;}}],rows.slice(0,200),{empty:"No sales"}));}
+        if(can("refund")&&r.status==="completed")w.appendChild(iconAction("↩️","Refund",function(){refundModal(r);}));
+        if(can("refund")&&r.status!=="voided")w.appendChild(iconAction("↶","Undo / void this sale",function(){voidModal(r);}));
+        if(can("*")&&r.status==="voided")w.appendChild(iconAction("🗑","Delete permanently",function(){deleteSale(r);}));
+        return w;}}],rows.slice(0,200),{empty:"No sales"}));}
+  /* Undo a mistaken sale: put the stock back, reverse credit + loyalty, and
+     keep the record marked "voided" so the audit trail stays intact. */
+  function voidModal(r){
+    var restock=el("input",{type:"checkbox"});restock.checked=true;
+    var damaged=el("input",{type:"checkbox"});
+    var reasonSel=el("select",{},Object.keys(LOSS_REASONS).map(function(k){return el("option",{value:k},LOSS_REASONS[k]);}));
+    var reasonRow=el("div",{class:"field mt",hidden:true},[el("label",{text:"Write-off reason"}),reasonSel]);
+    var noteInp=el("input",{placeholder:"Why is this being voided? (optional)"});
+    damaged.addEventListener("change",function(){reasonRow.hidden=!damaged.checked;
+      if(damaged.checked)restock.checked=false;});
+    restock.addEventListener("change",function(){if(restock.checked){damaged.checked=false;reasonRow.hidden=true;}});
+    var lines=r.items.map(function(it){return (it.quantity*(it.pack_units||1))+" × "+it.name;}).join("\n");
+    var body=el("div",{},[
+      el("div",{class:"banner banner-warn",html:"<strong>Void "+esc(r.receipt_no)+"</strong><br>"+
+        money(r.total)+" · "+esc(r.user)+" · "+fmtDate(r.created_at)}),
+      el("div",{class:"hint mb",style:"white-space:pre-line",text:lines}),
+      el("label",{class:"flex",style:"cursor:pointer"},[restock,el("span",{text:"Put the goods back into stock"})]),
+      el("label",{class:"flex mt",style:"cursor:pointer"},[damaged,el("span",{text:"Goods are damaged — write them off as a loss at cost price"})]),
+      reasonRow,
+      el("div",{class:"field mt"},[el("label",{text:"Note"}),noteInp])]);
+    modal("↶ Undo sale",body,[{label:t("common.cancel"),class:"btn-ghost"},
+      {label:"Void sale",class:"btn-danger",onClick:function(){
+        var lossTotal=0;
+        r.items.forEach(function(it){if(it.product_id==null)return;
+          var pieces=(it.quantity-(it.refunded_qty||0))*(it.pack_units||1);
+          if(pieces<=0)return;
+          var prod=DB.data.products.filter(function(x){return x.id===it.product_id;})[0];
+          if(!prod)return;
+          if(restock.checked){adjustStock(prod.id,pieces,"void","Void "+r.receipt_no);}
+          else if(damaged.checked){
+            /* Not restocked and damaged: book the loss without moving stock
+               back first — the goods never return to the shelf. */
+            var cost=prod.purchase_price||0,val=Math.round(pieces*cost*100)/100;lossTotal+=val;
+            DB.data.writeoffs=DB.data.writeoffs||[];
+            DB.data.writeoffs.unshift({id:DB.nextId("writeoffs"),product_id:prod.id,
+              product_name:prod.name_en||prod.name_ar,qty:pieces,reason:reasonSel.value,
+              cost_price:cost,loss_value:val,note:"Voided sale "+r.receipt_no+(noteInp.value?" — "+noteInp.value:""),
+              user:SESSION.user?SESSION.user.username:"",created_at:new Date().toISOString()});
+            DB.data.movements.unshift({id:DB.nextId("movements"),product_id:prod.id,product_name:prod.name_en,
+              change_qty:0,balance:prod.quantity,reason:reasonSel.value,
+              note:"Write-off from voided sale "+r.receipt_no,loss_value:val,
+              user:SESSION.user?SESSION.user.username:"",created_at:new Date().toISOString()});}});
+        /* Reverse customer credit and loyalty granted by this sale. */
+        if(r.customer_id){var c=DB.data.customers.filter(function(x){return x.id===r.customer_id;})[0];
+          if(c){if(r.payment_method==="credit")c.credit=Math.max(0,c.credit-(r.total-r.paid));
+            c.loyalty_pts=Math.max(0,c.loyalty_pts-Math.floor(r.total));}}
+        r.status="voided";r.void_note=noteInp.value||"";r.voided_at=new Date().toISOString();
+        r.voided_by=SESSION.user.username;
+        DB.save();log("void_sale","sale",r.receipt_no+(lossTotal?(" loss="+lossTotal):""));
+        toast("Sale "+r.receipt_no+" voided"+(lossTotal?(" · loss "+money(lossTotal)):""),"success");
+        refreshNavBadges();load();}}]);}
+  function deleteSale(r){
+    confirmModal("Permanently delete "+r.receipt_no+"? The voided record disappears from history for good.",function(){
+      DB.data.sales=DB.data.sales.filter(function(x){return x.id!==r.id;});
+      DB.save();log("delete_sale","sale",r.receipt_no);toast("Sale deleted","success");load();});}
   function refundModal(r){var inputs={};var rows=r.items.map(function(it){var max=it.quantity-it.refunded_qty;var i=el("input",{type:"number",step:"any",value:max,style:"width:80px"});inputs[it.id||it.name]=i;return{it:it,i:i,max:max};});
     modal("Refund · "+r.receipt_no,table([{key:"name",label:"Product",render:function(x){return x.it.name;}},
       {key:"sold",label:"Sold",num:true,render:function(x){return num(x.it.quantity);}},{key:"r",label:"Refund Qty",num:true,render:function(x){return x.i;}}],rows),
