@@ -235,8 +235,9 @@ td.num,th.num{text-align:end;font-variant-numeric:tabular-nums}
 .pos-layout{display:grid;grid-template-columns:1fr 420px;gap:0;height:calc(100vh - 67px)}
 .pos-left{display:flex;flex-direction:column;gap:14px;min-height:0;padding:20px;overflow:hidden}
 .pos-search{position:relative;flex-shrink:0}
-.pos-search input{font-size:16px;padding:15px 17px 15px 46px;border-radius:var(--radius);
+.pos-search input{font-size:16px;padding:15px 56px 15px 46px;border-radius:var(--radius);
   box-shadow:var(--shadow-xs);border-width:2px}
+[dir="rtl"] .pos-search input{padding:15px 46px 15px 56px}
 .pos-search::before{content:"⌕";position:absolute;inset-inline-start:17px;top:50%;transform:translateY(-50%);
   font-size:22px;color:var(--text-soft);pointer-events:none;font-weight:700}
 .pos-suggest{position:absolute;top:calc(100% + 8px);inset-inline:0;background:var(--surface);
@@ -441,6 +442,8 @@ var DB={
     def(sd,"scale_enabled","1");def(sd,"scale_prefix","2");def(sd,"scale_plu_len",6);
     def(sd,"scale_value_len",5);def(sd,"scale_mode","price");
     def(sd,"scale_price_divisor",100);def(sd,"scale_weight_divisor",1000);
+    def(sd,"loyalty_enabled","1");def(sd,"loyalty_earn_per",1);
+    def(sd,"loyalty_point_value",0.01);def(sd,"loyalty_min_redeem",100);
     /* An earlier default added up to 12 digits, which is not a valid EAN-13.
        Repair it so scale labels parse. */
     if(String(sd.scale_prefix||"2").length+(parseInt(sd.scale_plu_len)||0)+(parseInt(sd.scale_value_len)||0)+1!==13){
@@ -488,7 +491,8 @@ var DB={
       tax_rate:20,zakat_rate:2.5,language:"en",theme:"light",receipt_width:80,
       receipt_footer:"Thank you for your visit!",
       scale_enabled:"1",scale_prefix:"2",scale_plu_len:6,scale_value_len:5,scale_mode:"price",
-      scale_price_divisor:100,scale_weight_divisor:1000},
+      scale_price_divisor:100,scale_weight_divisor:1000,
+      loyalty_enabled:"1",loyalty_earn_per:1,loyalty_point_value:0.01,loyalty_min_redeem:100},
       users:[{id:1,username:"admin",full_name:"System Administrator",password:hashPw("admin123"),role:"administrator",active:1,last_login:null},
              {id:2,username:"cashier",full_name:"Demo Cashier",password:hashPw("cashier123"),role:"cashier",active:1,last_login:null}],
       categories:[],brands:[],suppliers:[
@@ -907,7 +911,10 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
   var searchInput=el("input",{type:"text",placeholder:t("pos.search_placeholder"),id:"pos-search",autocomplete:"off"});
   var suggest=el("div",{class:"pos-suggest"});var grid=el("div",{class:"pos-grid"});
   var chipRow=el("div",{class:"chip-row"});
-  var left=el("div",{class:"pos-left"},[el("div",{class:"pos-search"},[searchInput,suggest]),
+  var camBtn=el("button",{class:"icon-btn",title:"Scan with camera",text:"📷",
+    style:"position:absolute;inset-inline-end:8px;top:50%;transform:translateY(-50%)",
+    onClick:function(){cameraScanModal(function(code){searchInput.value=code;doSearch(code,true);});}});
+  var left=el("div",{class:"pos-left"},[el("div",{class:"pos-search"},[searchInput,camBtn,suggest]),
     chipRow,el("div",{class:"pos-scroll"},grid)]);
   var cartItems=el("div",{class:"cart-items"});var totalsBox=el("div",{});
   var custLabel=el("span",{text:t("pos.walk_in")});
@@ -1143,37 +1150,70 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
     DB.data._held=DB.data._held.filter(function(x){return x.id!==h.id;});DB.save();updateHeldLabel();renderCart();}
   /* ---- Payment (cash / card / transfer / mixed / credit) ---- */
   function openPayment(tot){if(!state.cart.length){toast(t("pos.empty_cart"),"error");return;}
+    var cust=state.customer_id?DB.data.customers.filter(function(x){return x.id===state.customer_id;})[0]:null;
+    var redeemPts=0;                     /* points the customer is spending */
+    function redeemValue(){return Math.min(pointsToMoney(redeemPts),tot.total);}
+    function payable(){return round2(tot.total-redeemValue());}
     var methodSel=el("select",{},[el("option",{value:"cash"},"Cash"),el("option",{value:"card"},"Card"),
       el("option",{value:"transfer"},"Bank Transfer"),el("option",{value:"mixed"},"Mixed (cash + card)"),el("option",{value:"credit"},"Credit (Customer)")]);
     var fields=el("div",{});var summary=el("div",{class:"flex",style:"justify-content:space-between;margin-top:12px"});
     var ref={};
     function build(){var mth=methodSel.value;clear(fields);clear(summary);ref={};
-      if(mth==="cash"){ref.paid=el("input",{type:"number",step:"0.01",value:tot.total.toFixed(2),style:"font-size:20px"});
+      if(mth==="cash"){ref.paid=el("input",{type:"number",step:"0.01",value:payable().toFixed(2),style:"font-size:20px"});
         fields.appendChild(el("div",{class:"field"},[el("label",{text:"Cash tendered"}),ref.paid]));
-        var ch=el("strong",{text:money(0)});ref.paid.addEventListener("input",function(){ch.textContent=money(Math.max((parseFloat(ref.paid.value)||0)-tot.total,0));});
+        var ch=el("strong",{text:money(0)});ref.paid.addEventListener("input",function(){ch.textContent=money(Math.max((parseFloat(ref.paid.value)||0)-payable(),0));});
         summary.appendChild(el("span",{class:"muted",text:t("pos.change")}));summary.appendChild(ch);setTimeout(function(){ref.paid.select();},40);}
       else if(mth==="card"||mth==="transfer"){summary.appendChild(el("span",{class:"muted",text:"Paid in full"}));summary.appendChild(el("strong",{text:money(tot.total)}));}
-      else if(mth==="mixed"){ref.cash=el("input",{type:"number",step:"0.01",value:"0"});ref.card=el("input",{type:"number",step:"0.01",value:tot.total.toFixed(2)});
+      else if(mth==="mixed"){ref.cash=el("input",{type:"number",step:"0.01",value:"0"});ref.card=el("input",{type:"number",step:"0.01",value:payable().toFixed(2)});
         fields.appendChild(el("div",{class:"form-grid"},[el("div",{class:"field"},[el("label",{text:"Cash"}),ref.cash]),el("div",{class:"field"},[el("label",{text:"Card"}),ref.card])]));
-        var rem=el("strong",{text:money(0)});function upd(){var p=(parseFloat(ref.cash.value)||0)+(parseFloat(ref.card.value)||0);rem.textContent=money(tot.total-p);rem.className=p>=tot.total?"up":"down";}
+        var rem=el("strong",{text:money(0)});function upd(){var p=(parseFloat(ref.cash.value)||0)+(parseFloat(ref.card.value)||0);rem.textContent=money(payable()-p);rem.className=p>=payable()?"up":"down";}
         ref.cash.addEventListener("input",upd);ref.card.addEventListener("input",upd);
         summary.appendChild(el("span",{class:"muted",text:"Remaining"}));summary.appendChild(rem);}
       else if(mth==="credit"){ref.paid=el("input",{type:"number",step:"0.01",value:"0"});
         fields.appendChild(el("div",{class:"field"},[el("label",{text:"Paid now (rest goes to credit)"}),ref.paid]));
-        var owe=el("strong",{text:money(tot.total)});ref.paid.addEventListener("input",function(){owe.textContent=money(Math.max(tot.total-(parseFloat(ref.paid.value)||0),0));});
+        var owe=el("strong",{text:money(payable())});ref.paid.addEventListener("input",function(){owe.textContent=money(Math.max(payable()-(parseFloat(ref.paid.value)||0),0));});
         summary.appendChild(el("span",{class:"muted",text:"To customer credit"}));summary.appendChild(owe);
         if(!state.customer_id)fields.appendChild(el("div",{class:"banner mt",text:"Select a customer first (👤 button) to record credit."}));}}
     methodSel.addEventListener("change",build);build();
-    var body=el("div",{},[el("div",{class:"stat",style:"text-align:center;margin-bottom:16px"},[el("div",{class:"stat-label",text:t("common.total")}),el("div",{class:"stat-value",text:money(tot.total)})]),
+    /* Loyalty redemption */
+    var totalEl=el("div",{class:"stat-value",text:money(tot.total)});
+    var redeemNote=el("div",{class:"stat-sub"});
+    var loyaltyBox=el("div",{});
+    var maxPts=maxRedeemablePoints(cust,tot.total);
+    if(loyaltyConfig().enabled&&cust){
+      if(maxPts>0){
+        var ptsInp=el("input",{type:"number",step:"1",value:"0",min:"0",max:String(maxPts),style:"width:120px"});
+        var useAll=el("button",{class:"btn btn-sm btn-ghost",text:"Use all",onClick:function(){
+          ptsInp.value=String(maxPts);apply();}});
+        function apply(){
+          var v=Math.max(0,Math.min(parseInt(ptsInp.value)||0,maxPts));
+          ptsInp.value=String(v);redeemPts=v;
+          totalEl.textContent=money(payable());
+          redeemNote.textContent=redeemPts?("−"+money(redeemValue())+" from "+num(redeemPts)+" points"):"";
+          build();}
+        ptsInp.addEventListener("input",apply);
+        loyaltyBox.appendChild(el("div",{class:"banner"},[
+          el("div",{style:"font-weight:650;margin-bottom:6px",text:"⭐ "+cust.name+" has "+num(cust.loyalty_pts)+" points ("+money(pointsToMoney(cust.loyalty_pts))+")"}),
+          el("div",{class:"flex"},[el("span",{class:"hint",text:"Redeem"}),ptsInp,
+            el("span",{class:"hint",text:"pts · max "+num(maxPts)}),useAll])]));}
+      else if(cust.loyalty_pts>0)
+        loyaltyBox.appendChild(el("div",{class:"banner",text:"⭐ "+cust.name+" has "+num(cust.loyalty_pts)+
+          " points — "+num(loyaltyConfig().minRedeem)+" needed before they can be spent."}));}
+    var body=el("div",{},[el("div",{class:"stat",style:"text-align:center;margin-bottom:16px"},
+        [el("div",{class:"stat-label",text:t("common.total")}),totalEl,redeemNote]),
+      loyaltyBox,
       el("div",{class:"field"},[el("label",{text:"Payment Method"}),methodSel]),el("div",{class:"mt"},[fields]),summary]);
     modal(t("pos.pay"),body,[{label:t("common.cancel"),class:"btn-ghost"},{label:t("pos.pay"),class:"btn-success",onClick:function(){
       var mth=methodSel.value,paid,detail={};
-      if(mth==="cash"){paid=parseFloat(ref.paid.value)||0;if(paid<tot.total){toast("Cash tendered is less than the total","error");return false;}}
-      else if(mth==="card"||mth==="transfer"){paid=tot.total;detail[mth]=tot.total;}
-      else if(mth==="mixed"){var c=parseFloat(ref.cash.value)||0,cd=parseFloat(ref.card.value)||0;paid=c+cd;detail={cash:c,card:cd};if(paid<tot.total){toast("Split amounts are less than the total","error");return false;}}
+      var due=payable();
+      if(mth==="cash"){paid=parseFloat(ref.paid.value)||0;if(paid<due){toast("Cash tendered is less than the total","error");return false;}}
+      else if(mth==="card"||mth==="transfer"){paid=due;detail[mth]=due;}
+      else if(mth==="mixed"){var c=parseFloat(ref.cash.value)||0,cd=parseFloat(ref.card.value)||0;paid=c+cd;detail={cash:c,card:cd};if(paid<due){toast("Split amounts are less than the total","error");return false;}}
       else{if(!state.customer_id){toast("Select a customer for a credit sale","error");return false;}paid=parseFloat(ref.paid.value)||0;}
-      return checkout(tot,mth,paid,detail);}}]);}
-  function checkout(tot,method,paid,detail){
+      return checkout(tot,mth,paid,detail,redeemPts);}}]);}
+  function checkout(tot,method,paid,detail,redeemPts){
+    redeemPts=Math.max(0,parseInt(redeemPts)||0);
+    var redeemAmt=Math.min(pointsToMoney(redeemPts),tot.total);
     for(var i=0;i<state.cart.length;i++){var l=state.cart[i];if(l.product_id==null)continue;
       var p=DB.data.products.filter(function(x){return x.id===l.product_id;})[0];
       if(!p||cartPieces(l.product_id)>p.quantity){toast("Insufficient stock: "+l.name,"error");return false;}}
@@ -1187,8 +1227,9 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
     var sale={id:DB.nextId("sales"),receipt_no:rc,user:SESSION.user.username,customer_id:state.customer_id,
       register_id:openReg?openReg.id:null,
       subtotal:Math.round(tot.subtotal*100)/100,discount:Math.round(tot.disc*100)/100,tax:Math.round(tot.tax*100)/100,
-      total:Math.round(tot.total*100)/100,cost_total:Math.round(tot.cost*100)/100,profit:Math.round(tot.profit*100)/100,
-      paid:Math.round(paid*100)/100,change_due:Math.round(Math.max(paid-tot.total,0)*100)/100,payment_method:method,
+      total:round2(tot.total-redeemAmt),cost_total:round2(tot.cost),profit:round2(tot.profit-redeemAmt),
+      points_redeemed:redeemPts,points_value:round2(redeemAmt),
+      paid:round2(paid),change_due:round2(Math.max(paid-(tot.total-redeemAmt),0)),payment_method:method,
       payment_detail:detail||{},status:"completed",items:items,created_at:new Date().toISOString()};
     DB.data.sales.unshift(sale);
     state.cart.forEach(function(l){if(l.product_id==null)return;
@@ -1200,7 +1241,11 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
       adjustStock(l.product_id,-pieces,"sale",
         rc+((l.pack_units||1)>1?(" ("+l.quantity+" "+l.pack_label+")"):"")+tag);});
     if(state.customer_id){var cust=DB.data.customers.filter(function(x){return x.id===state.customer_id;})[0];
-      if(cust){if(method==="credit"&&paid<sale.total)cust.credit+=(sale.total-paid);cust.loyalty_pts+=Math.floor(sale.total);}}
+      if(cust){
+        if(method==="credit"&&paid<sale.total)cust.credit=round2(cust.credit+(sale.total-paid));
+        /* Spend first, then earn on what was actually paid. */
+        cust.loyalty_pts=Math.max(0,cust.loyalty_pts-redeemPts);
+        cust.loyalty_pts+=pointsEarned(sale.total);}}
     DB.save();log("sale","sale",rc+" total="+sale.total);
     toast("Sale "+rc+" completed","success");
     state.cart=[];state.discount=0;state.customer_id=null;custLabel.textContent=t("pos.walk_in");renderCart();loadTiles();searchInput.focus();
@@ -1232,7 +1277,9 @@ function printReceipt(sale){var st=DB.data.settings;var w=window.open("","_blank
     "<tr><td>Tax</td><td style='text-align:right'>"+sale.tax.toFixed(2)+"</td></tr>"+
     "<tr class='tot'><td>TOTAL</td><td style='text-align:right'>"+sale.total.toFixed(2)+" "+st.currency+"</td></tr>"+
     "<tr><td>Paid</td><td style='text-align:right'>"+sale.paid.toFixed(2)+"</td></tr>"+
-    "<tr><td>Change</td><td style='text-align:right'>"+sale.change_due.toFixed(2)+"</td></tr></table>"+
+    "<tr><td>Change</td><td style='text-align:right'>"+sale.change_due.toFixed(2)+"</td></tr>"+
+    (sale.points_redeemed?("<tr><td>Points used</td><td style='text-align:right'>"+sale.points_redeemed+" (-"+(sale.points_value||0).toFixed(2)+")</td></tr>"):"")+
+    "</table>"+
     '<div class="sep"></div><div class="c">'+esc(st.receipt_footer||"Thank you!")+"</div>"+
     "<script>window.onload=function(){window.print();}<\/script></body></html>");w.document.close();}
 
@@ -1524,6 +1571,68 @@ function writeOffModal(product,onDone){
 var UNITS=["pcs","box","pack","kg","g","L","ml","m"];
 function isBarcodeLike(s){return /^[0-9]{6,14}$/.test((s||"").trim());}
 
+/* ---- Loyalty ----------------------------------------------------------
+   Customers earn points per unit of currency spent and can spend them back as
+   a discount. Point value and the minimum redemption are configurable. */
+function loyaltyConfig(){var st=DB.data.settings;
+  return{enabled:String(st.loyalty_enabled)==="1",
+    earnPer:parseFloat(st.loyalty_earn_per)||1,
+    pointValue:parseFloat(st.loyalty_point_value)||0.01,
+    minRedeem:parseInt(st.loyalty_min_redeem)||0};}
+function pointsEarned(total){var c=loyaltyConfig();
+  return c.enabled?Math.floor((total||0)*c.earnPer):0;}
+function pointsToMoney(points){return round2((points||0)*loyaltyConfig().pointValue);}
+function moneyToPoints(amount){var v=loyaltyConfig().pointValue;
+  return v>0?Math.ceil((amount||0)/v):0;}
+/* Most points a customer may spend on this basket. */
+function maxRedeemablePoints(customer,orderTotal){
+  var c=loyaltyConfig();
+  if(!c.enabled||!customer||!customer.loyalty_pts)return 0;
+  if(customer.loyalty_pts<c.minRedeem)return 0;
+  return Math.min(customer.loyalty_pts,moneyToPoints(orderTotal));}
+
+/* ---- Camera barcode scanning ------------------------------------------
+   Uses the browser's native BarcodeDetector, so it works offline with no
+   external library. Unsupported browsers get a clear message instead. */
+function cameraScanSupported(){return typeof window.BarcodeDetector!=="undefined"&&
+  !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);}
+function cameraScanModal(onCode){
+  if(!cameraScanSupported()){
+    modal("📷 Camera scanning",el("div",{},[
+      el("div",{class:"banner banner-warn",text:"This browser cannot scan with the camera."}),
+      el("div",{class:"hint",text:"Camera scanning needs the built-in BarcodeDetector, available in Chrome, Edge and Android browsers. "+
+        "On other browsers use a USB/Bluetooth scanner or type the barcode."})]));
+    return;}
+  var video=el("video",{autoplay:true,playsinline:true,muted:true,
+    style:"width:100%;border-radius:var(--radius-sm);background:#000;max-height:60vh"});
+  var status=el("div",{class:"hint mt",style:"text-align:center",text:"Point the camera at a barcode…"});
+  var stream=null,stop=false,detector=null;
+  var m=modal("📷 Scan with camera",el("div",{},[video,status]),
+    [{label:t("common.close"),class:"btn-ghost",onClick:function(){cleanup();}}],{sticky:false});
+  /* Make sure the camera is released however the dialog is dismissed. */
+  var origClose=m.close;
+  m.close=function(){cleanup();origClose();};
+  m.overlay.addEventListener("click",function(e){if(e.target===m.overlay)cleanup();});
+  function cleanup(){stop=true;
+    if(stream){stream.getTracks().forEach(function(tr){try{tr.stop();}catch(e){}});stream=null;}}
+  try{detector=new window.BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39","qr_code","itf"]});}
+  catch(e){detector=new window.BarcodeDetector();}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}).then(function(st){
+    stream=st;video.srcObject=st;tick();}).catch(function(err){
+    status.textContent="Could not open the camera: "+(err&&err.message||err);});
+  function tick(){
+    if(stop)return;
+    if(video.readyState<2){requestAnimationFrame(tick);return;}
+    detector.detect(video).then(function(codes){
+      if(stop)return;
+      if(codes&&codes.length){
+        var value=codes[0].rawValue;
+        if(value){status.textContent="Found "+value;
+          cleanup();origClose();onCode(value);return;}}
+      setTimeout(tick,180);
+    }).catch(function(){setTimeout(tick,300);});}
+}
+
 /* ---- Scale / weighed-item barcodes ------------------------------------
    Deli, butcher and produce scales print an in-store EAN-13 that embeds
    either the price or the weight of the piece being sold:
@@ -1735,7 +1844,10 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
     var inp=el("input",{type:"text",placeholder:"Scan the barcode now…",style:"font-size:20px;text-align:center;letter-spacing:2px"});
     var hint=el("div",{class:"hint mt",style:"text-align:center",text:"Point the scanner at the product's existing barcode, or type it and press Enter."});
     var m=modal("📷 "+t("quick.scan_add"),el("div",{},[
-      el("div",{style:"font-size:44px;text-align:center;margin-bottom:10px",text:"🏷"}),inp,hint]),
+      el("div",{style:"font-size:44px;text-align:center;margin-bottom:10px",text:"🏷"}),inp,hint,
+      el("div",{class:"flex mt",style:"justify-content:center"},[
+        el("button",{class:"btn btn-soft btn-sm",text:"📷 Use camera",onClick:function(){
+          cameraScanModal(function(code){inp.value=code;go();});}})])]),
       [{label:t("common.cancel"),class:"btn-ghost"},
        {label:"Continue",class:"btn-primary",onClick:function(){return go();}}]);
     function go(){var code=(inp.value||"").trim();
@@ -2672,8 +2784,10 @@ VIEWS.history={title:function(){return t("nav.history");},render:function(root){
               user:SESSION.user?SESSION.user.username:"",created_at:new Date().toISOString()});}});
         /* Reverse customer credit and loyalty granted by this sale. */
         if(r.customer_id){var c=DB.data.customers.filter(function(x){return x.id===r.customer_id;})[0];
-          if(c){if(r.payment_method==="credit")c.credit=Math.max(0,c.credit-(r.total-r.paid));
-            c.loyalty_pts=Math.max(0,c.loyalty_pts-Math.floor(r.total));}}
+          if(c){if(r.payment_method==="credit")c.credit=Math.max(0,round2(c.credit-(r.total-r.paid)));
+            /* Take back what the sale earned, and hand back what it spent. */
+            c.loyalty_pts=Math.max(0,c.loyalty_pts-pointsEarned(r.total));
+            c.loyalty_pts+=(r.points_redeemed||0);}}
         r.status="voided";r.void_note=noteInp.value||"";r.voided_at=new Date().toISOString();
         r.voided_by=SESSION.user.username;
         DB.save();log("void_sale","sale",r.receipt_no+(lossTotal?(" loss="+lossTotal):""));
@@ -2765,12 +2879,19 @@ VIEWS.settings={title:function(){return t("nav.settings");},render:function(root
     {name:"scale_plu_len",label:"PLU digits (prefix+PLU+value+1 must equal 13)",type:"number",step:"1"},
     {name:"scale_value_len",label:"Value digits",type:"number",step:"1"},
     {name:"scale_price_divisor",label:"Price divisor (100 = cents)",type:"number",step:"1"},
-    {name:"scale_weight_divisor",label:"Weight divisor (1000 = grams→kg)",type:"number",step:"1"}],s);
+    {name:"scale_weight_divisor",label:"Weight divisor (1000 = grams→kg)",type:"number",step:"1"},
+    {name:"loyalty_enabled",label:"Loyalty points",type:"select",options:[{value:"1",label:"Enabled"},{value:"0",label:"Disabled"}]},
+    {name:"loyalty_earn_per",label:"Points earned per 1 "+(s.currency||"MAD"),type:"number",step:"0.01"},
+    {name:"loyalty_point_value",label:"Value of 1 point",type:"number",step:"0.001"},
+    {name:"loyalty_min_redeem",label:"Minimum points to redeem",type:"number",step:"1"}],s);
   root.appendChild(el("div",{class:"card",style:"max-width:760px"},[el("h3",{class:"mb",text:"Store Settings"}),form.node,
     el("button",{class:"btn btn-primary mt",text:t("common.save"),onClick:function(){var v=form.values();
       v.tax_rate=parseFloat(v.tax_rate)||0;v.zakat_rate=parseFloat(v.zakat_rate)||2.5;v.receipt_width=parseInt(v.receipt_width)||80;
       v.scale_plu_len=parseInt(v.scale_plu_len)||5;v.scale_value_len=parseInt(v.scale_value_len)||5;
       v.scale_price_divisor=parseFloat(v.scale_price_divisor)||100;v.scale_weight_divisor=parseFloat(v.scale_weight_divisor)||1000;
+      v.loyalty_earn_per=parseFloat(v.loyalty_earn_per)||1;v.loyalty_point_value=parseFloat(v.loyalty_point_value)||0.01;
+      v.loyalty_min_redeem=parseInt(v.loyalty_min_redeem)||0;
+      if(v.loyalty_point_value<0||v.loyalty_earn_per<0){toast("Loyalty values cannot be negative","error");return false;}
       var need=String(v.scale_prefix||"2").length+v.scale_plu_len+v.scale_value_len+1;
       if(String(v.scale_enabled)==="1"&&need!==13){toast("Scale layout must total 13 digits — currently "+need,"error");return false;}
       for(var k in v)s[k]=v[k];DB.save();log("update_settings","settings","");toast("Settings saved","success");}})]));
