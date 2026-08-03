@@ -438,12 +438,28 @@ var DB={
     def(d,"writeoffs",[]);def(d,"_held",[]);def(d,"purchase_returns",[]);def(d,"stocktakes",[]);
     (d.products||[]).forEach(function(p){def(p,"plu","");});
     var sd=d.settings||{};
-    def(sd,"scale_enabled","1");def(sd,"scale_prefix","2");def(sd,"scale_plu_len",5);
+    def(sd,"scale_enabled","1");def(sd,"scale_prefix","2");def(sd,"scale_plu_len",6);
     def(sd,"scale_value_len",5);def(sd,"scale_mode","price");
     def(sd,"scale_price_divisor",100);def(sd,"scale_weight_divisor",1000);
+    /* An earlier default added up to 12 digits, which is not a valid EAN-13.
+       Repair it so scale labels parse. */
+    if(String(sd.scale_prefix||"2").length+(parseInt(sd.scale_plu_len)||0)+(parseInt(sd.scale_value_len)||0)+1!==13){
+      sd.scale_prefix="2";sd.scale_plu_len=6;sd.scale_value_len=5;changed=true;}
     if(!d.counters)d.counters={sale:0,purchase:0};
     if(changed)this.save();},
-  save:function(){localStorage.setItem(STORE_KEY,JSON.stringify(this.data));},
+  /* Persisting must never fail silently: if the browser's storage is full the
+     cashier has to know immediately, because the sale they just rang up would
+     otherwise be lost on refresh. */
+  save:function(){
+    try{localStorage.setItem(STORE_KEY,JSON.stringify(this.data));this.saveFailed=false;return true;}
+    catch(e){
+      this.saveFailed=true;
+      var full=(e&&(e.name==="QuotaExceededError"||e.code===22||e.code===1014));
+      try{toast(full?"STORAGE FULL — this change was NOT saved. Export a backup, then remove product photos or old sales."
+                    :"Could not save data: "+(e&&e.message||e),"error");}catch(_){}
+      return false;}},
+  /* Rough share of the ~5 MB localStorage budget currently in use. */
+  usage:function(){try{return JSON.stringify(this.data).length;}catch(e){return 0;}},
   reset:function(){localStorage.removeItem(STORE_KEY);this.data=null;this.seed();},
   nextId:function(coll){var arr=this.data[coll],m=0;for(var i=0;i<arr.length;i++)if(arr[i].id>m)m=arr[i].id;return m+1;},
   seed:function(){
@@ -471,7 +487,7 @@ var DB={
     var d={settings:{store_name:"KAKA Market",store_address:"",store_phone:"",currency:"MAD",
       tax_rate:20,zakat_rate:2.5,language:"en",theme:"light",receipt_width:80,
       receipt_footer:"Thank you for your visit!",
-      scale_enabled:"1",scale_prefix:"2",scale_plu_len:5,scale_value_len:5,scale_mode:"price",
+      scale_enabled:"1",scale_prefix:"2",scale_plu_len:6,scale_value_len:5,scale_mode:"price",
       scale_price_divisor:100,scale_weight_divisor:1000},
       users:[{id:1,username:"admin",full_name:"System Administrator",password:hashPw("admin123"),role:"administrator",active:1,last_login:null},
              {id:2,username:"cashier",full_name:"Demo Cashier",password:hashPw("cashier123"),role:"cashier",active:1,last_login:null}],
@@ -481,6 +497,7 @@ var DB={
         {id:3,company_name:"TechnoPro Import",contact_person:"",category:"Electronics",phone1:"0522330033",whatsapp:"",email:"techno@example.com",city:"",country:"",tax_number:"",address:"",notes:"",balance:0,active:1}],
       customers:[],products:[],sales:[],purchases:[],expenses:[],movements:[],registers:[],
       activity:[],counters:{sale:0,purchase:0}};
+    d._seedMovements=true;
     cats.forEach(function(c,i){d.categories.push({id:i+1,name:c,name_ar:"",name_fr:""});});
     brands.forEach(function(b,i){d.brands.push({id:i+1,name:b});});
     var catId={};d.categories.forEach(function(c){catId[c.name]=c.id;});
@@ -494,6 +511,16 @@ var DB={
         units_per_box:p[11]||0,pack_name:"Box",box_barcode:p[11]?("2"+bc.slice(1)):"",box_price:p[12]||0,
         archived:0,created_at:now});
     });
+    /* Opening balances belong in the ledger too, so movements reconcile
+       against quantity from day one. */
+    var now2=new Date().toISOString();
+    d.products.forEach(function(pr){
+      if(!pr.quantity)return;
+      d.movements.push({id:d.movements.length+1,product_id:pr.id,product_name:pr.name_en,
+        change_qty:pr.quantity,balance:pr.quantity,reason:"initial",note:"Opening stock",
+        loss_value:0,user:"system",created_at:now2});});
+    d.movements.reverse();
+    delete d._seedMovements;
     this.data=d;this.save();
   }
 };
@@ -597,6 +624,16 @@ function barChart(data){var max=1;data.forEach(function(d){max=Math.max(max,d.va
     kids.push(el("div",{class:"chart-bar",title:d.label+": "+money(d.value),style:"height:"+(d.value/max*100)+"%"}));
     return el("div",{class:"chart-bar-wrap"},[el("div",{class:"flex",style:"align-items:flex-end;gap:2px;height:100%"},kids),
       el("div",{class:"chart-label",text:d.label})]);}));}
+/* Simple page switcher used by long lists. */
+function pager(d,go){
+  if(!d.pages||d.pages<=1)return el("div");
+  var wrap=el("div",{class:"flex mt",style:"justify-content:center"});
+  wrap.appendChild(el("button",{class:"btn btn-sm btn-ghost",text:"‹",
+    onClick:function(){if(d.page>1)go(d.page-1);}}));
+  wrap.appendChild(el("span",{style:"padding:0 12px",class:"hint",text:d.page+" / "+d.pages}));
+  wrap.appendChild(el("button",{class:"btn btn-sm btn-ghost",text:"›",
+    onClick:function(){if(d.page<d.pages)go(d.page+1);}}));
+  return wrap;}
 function iconAction(icon,title,fn){return el("button",{class:"icon-btn btn-sm",style:"width:32px;height:32px;font-size:14px",title:title,html:icon,onClick:fn});}
 function csvExport(filename,headers,rows){var lines=[headers.join(",")];
   rows.forEach(function(r){lines.push(r.map(function(c){c=c==null?"":(""+c);
@@ -679,8 +716,17 @@ function expiryState(p){var e=nextExpiry(p);if(!e)return null;
   var d=daysUntil(e);if(d===null)return null;
   return{date:e,days:d,status:d<0?"expired":(d<=7?"critical":(d<=30?"soon":"ok"))};}
 /* Pieces already expired — what a write-off would remove. */
-function expiredQty(p){var n=0;(p.batches||[]).forEach(function(b){
-    if(b.expiry&&b.qty>0&&daysUntil(b.expiry)<0)n+=b.qty;});return n;}
+function expiredQty(p){
+  var tracked=(p.batches||[]).filter(function(b){return b.qty>0;});
+  if(tracked.length){var n=0;tracked.forEach(function(b){
+    if(b.expiry&&daysUntil(b.expiry)<0)n+=b.qty;});return n;}
+  /* No batches: fall back to the product's single expiry date. */
+  if(p.expiry_date&&daysUntil(p.expiry_date)<0)return p.quantity||0;
+  return 0;}
+/* Stock not covered by any batch — shown so expiry data can be trusted. */
+function untrackedQty(p){
+  var t=totalBatchQty(p);if(!t)return 0;
+  return Math.round(((p.quantity||0)-t)*1000)/1000;}
 
 /* ---------- Stock loss / write-off -------------------------------------
    Damage, loss, expiry and theft remove stock AND book a monetary loss at
@@ -730,6 +776,35 @@ function serializeProduct(p){var d={};for(var k in p)d[k]=p[k];var sp=p.selling_
 
 /* ---------- Date/period analytics -------------------------------------- */
 function completedSales(){return DB.data.sales.filter(function(s){return s.status==="completed"||s.status==="partial_refund";});}
+/* Recompute a sale's money from what the customer actually kept. Called after
+   any refund so revenue, tax, cost and profit stop counting returned goods.
+   The original figures are preserved once, so repeated refunds stay accurate. */
+function recalcSaleTotals(sale){
+  if(sale.orig_total===undefined){
+    sale.orig_subtotal=sale.subtotal;sale.orig_total=sale.total;
+    sale.orig_tax=sale.tax;sale.orig_cost=sale.cost_total;
+    sale.orig_profit=sale.profit;sale.orig_discount=sale.discount;}
+  var fullSub=0,newSub=0,newTax=0,newCost=0;
+  (sale.items||[]).forEach(function(it){
+    var q=it.quantity||0,ref=it.refunded_qty||0,eff=Math.max(q-ref,0);
+    var ratio=q?eff/q:0;
+    var lineDisc=(it.discount||0);
+    fullSub+=it.unit_price*q-lineDisc;
+    var gross=it.unit_price*eff-lineDisc*ratio;
+    newSub+=gross;
+    newTax+=gross*(it.tax_rate||0)/100;
+    newCost+=(it.purchase_price||0)*eff;});
+  /* Scale the order-level discount to the part of the basket that was kept. */
+  var share=fullSub>0?(newSub/fullSub):0;
+  var disc=(sale.orig_discount||0)*share;
+  sale.subtotal=round2(newSub);
+  sale.discount=round2(disc);
+  sale.tax=round2(newTax);
+  sale.total=round2(newSub-disc+newTax);
+  sale.cost_total=round2(newCost);
+  sale.profit=round2(newSub-disc-newCost);
+  sale.refunded_total=round2((sale.orig_total||0)-sale.total);
+  return sale;}
 /* Voided sales are excluded from every revenue figure by the filter above. */
 function inPeriod(iso,period){var d=new Date(iso);var now=new Date();
   var dd=dnorm(iso);var td=today();
@@ -903,9 +978,10 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
     else if(e.key==="ArrowUp"){activeIdx=Math.max(activeIdx-1,0);hl();}else if(e.key==="Escape")resetSearch();});
   function hl(){var items=suggest.querySelectorAll(".pos-suggest-item");for(var i=0;i<items.length;i++)items[i].style.background=i===activeIdx?"var(--primary)":"";}
   function doSearch(q,scanned){if(!q)return;
-    /* A scale label carries its own weight/price — handle it before any
-       normal barcode lookup. */
-    var sc=resolveScaleBarcode(q);
+    /* A real product barcode always wins. Only codes that match no product are
+       tried as scale labels, so a genuine EAN-13 that happens to start with the
+       scale prefix still scans normally. */
+    var sc=findByBarcode(q)?null:resolveScaleBarcode(q);
     if(sc){
       if(sc.unknownPlu){toast("No product with PLU "+sc.unknownPlu+" — set the PLU on the product first","error");resetSearch();return;}
       if(!(sc.quantity>0)){toast("Could not read a quantity from that scale label","error");resetSearch();return;}
@@ -1462,7 +1538,7 @@ function isBarcodeLike(s){return /^[0-9]{6,14}$/.test((s||"").trim());}
 function scaleConfig(){var st=DB.data.settings;
   return{enabled:String(st.scale_enabled)==="1",
     prefix:String(st.scale_prefix||"2"),
-    pluLen:parseInt(st.scale_plu_len)||5,
+    pluLen:parseInt(st.scale_plu_len)||6,
     valLen:parseInt(st.scale_value_len)||5,
     mode:st.scale_mode||"price",
     priceDiv:parseFloat(st.scale_price_divisor)||100,
@@ -1704,6 +1780,8 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
     modal(r?t("common.edit"):t("common.add"),bodyNode,[{label:t("common.cancel"),class:"btn-ghost"},
       {label:t("common.save"),class:"btn-primary",onClick:function(){var v=form.values();
         if(!(v.name_en||v.name_ar||v.name_fr)){toast("A product name is required","error");return false;}
+        if(v.selling_price<0||v.purchase_price<0){toast("Prices cannot be negative","error");return false;}
+        if(v.tax_rate<0){toast("Tax cannot be negative","error");return false;}
         ["category_id","brand_id","supplier_id"].forEach(function(k){v[k]=v[k]?parseInt(v[k]):null;});
         /* A code must be unique across piece AND case barcodes. */
         function codeTaken(code){if(!code)return null;
@@ -1746,6 +1824,11 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
     var list=el("div",{});
     function draw(){clear(list);
       var bs=(product.batches||[]).slice().sort(function(a,b){return (a.expiry||"9999")<(b.expiry||"9999")?-1:1;});
+      var untracked=untrackedQty(product);
+      if(bs.length&&Math.abs(untracked)>0.001)
+        list.appendChild(el("div",{class:"banner banner-warn",
+          text:(untracked>0?("⚠ "+num(untracked,2)+" "+product.unit+" of stock is not in any batch — its expiry is unknown.")
+                           :("⚠ Batches hold "+num(-untracked,2)+" more than the stock on hand. Fix the batches or the quantity."))}));
       if(!bs.length){list.appendChild(el("div",{class:"hint",text:"No batches tracked. Add one to follow expiry dates for this product."}));return;}
       list.appendChild(table([
         {key:"expiry",label:"Expiry",render:function(b){if(!b.expiry)return "<span class='muted'>—</span>";
@@ -2495,11 +2578,42 @@ VIEWS.reports={title:function(){return t("nav.reports");},render:function(root){
 
 /* ---- Sales history ---- */
 VIEWS.history={title:function(){return t("nav.history");},render:function(root){
-  clear(root);var search=el("input",{class:"grow",placeholder:"Search receipt number..."});var holder=el("div",{});
-  root.appendChild(el("div",{class:"toolbar"},[search]));root.appendChild(holder);
-  var timer;search.addEventListener("input",function(){clearTimeout(timer);timer=setTimeout(load,150);});load();
+  clear(root);
+  var search=el("input",{placeholder:"Search receipt number..."});
+  var from=el("input",{type:"date",style:"width:auto"});
+  var to=el("input",{type:"date",style:"width:auto"});
+  var statusSel=el("select",{style:"width:auto"},[el("option",{value:""},"All statuses"),
+    el("option",{value:"completed"},"Completed"),el("option",{value:"partial_refund"},"Partly refunded"),
+    el("option",{value:"refunded"},"Refunded"),el("option",{value:"voided"},"Voided")]);
+  var holder=el("div",{});
+  root.appendChild(el("div",{class:"toolbar"},[el("div",{class:"search-wrap"},search),
+    el("label",{text:"From"}),from,el("label",{text:"To"}),to,statusSel,
+    el("button",{class:"btn btn-ghost btn-sm",text:"Clear",onClick:function(){
+      search.value="";from.value="";to.value="";statusSel.value="";page=1;load();}})]));
+  root.appendChild(holder);
+  var timer;search.addEventListener("input",function(){clearTimeout(timer);timer=setTimeout(function(){page=1;load();},150);});
+  from.addEventListener("change",function(){page=1;load();});
+  to.addEventListener("change",function(){page=1;load();});
+  statusSel.addEventListener("change",function(){page=1;load();});
   function custName(id){var c=DB.data.customers.filter(function(x){return x.id===id;})[0];return c?c.name:"—";}
-  function load(){var q=search.value.trim().toLowerCase();var rows=DB.data.sales.filter(function(s){return!q||s.receipt_no.toLowerCase().indexOf(q)>-1;});clear(holder);
+  var page=1,PER=50;
+  load();
+  function load(){var q=search.value.trim().toLowerCase();
+    var all=DB.data.sales.filter(function(s){
+      if(q&&s.receipt_no.toLowerCase().indexOf(q)<0)return false;
+      if(from.value&&dnorm(s.created_at)<from.value)return false;
+      if(to.value&&dnorm(s.created_at)>to.value)return false;
+      if(statusSel.value&&s.status!==statusSel.value)return false;
+      return true;});
+    var pages=Math.max(1,Math.ceil(all.length/PER));
+    if(page>pages)page=pages;
+    var rows=all.slice((page-1)*PER,page*PER);
+    clear(holder);
+    holder.appendChild(el("div",{class:"flex mb",style:"justify-content:space-between;flex-wrap:wrap"},[
+      el("span",{class:"hint",text:all.length+" sale(s) · showing "+(all.length?((page-1)*PER+1):0)+"–"+Math.min(page*PER,all.length)}),
+      el("button",{class:"btn btn-ghost btn-sm",text:"⬇ CSV",onClick:function(){
+        csvExport("sales.csv",["receipt","date","cashier","total","paid","payment","status"],
+          all.map(function(x){return[x.receipt_no,x.created_at,x.user,x.total,x.paid,x.payment_method,x.status];}));}})]));
     holder.appendChild(table([{key:"receipt_no",label:"Receipt",render:function(r){return "<strong>"+esc(r.receipt_no)+"</strong>";}},
       {key:"created_at",label:"Date",render:function(r){return fmtDate(r.created_at);}},{key:"user",label:"Cashier"},
       {key:"customer",label:"Customer",render:function(r){return custName(r.customer_id);}},
@@ -2512,7 +2626,8 @@ VIEWS.history={title:function(){return t("nav.history");},render:function(root){
         if(can("refund")&&r.status==="completed")w.appendChild(iconAction("↩️","Refund",function(){refundModal(r);}));
         if(can("refund")&&r.status!=="voided")w.appendChild(iconAction("↶","Undo / void this sale",function(){voidModal(r);}));
         if(can("*")&&r.status==="voided")w.appendChild(iconAction("🗑","Delete permanently",function(){deleteSale(r);}));
-        return w;}}],rows.slice(0,200),{empty:"No sales"}));}
+        return w;}}],rows,{empty:"No sales"}));
+    holder.appendChild(pager({page:page,pages:pages},function(pp){page=pp;load();}));}
   /* Undo a mistaken sale: put the stock back, reverse credit + loyalty, and
      keep the record marked "voided" so the audit trail stays intact. */
   function voidModal(r){
@@ -2576,7 +2691,13 @@ VIEWS.history={title:function(){return t("nav.history");},render:function(root){
           if(qty>0){var prop=qty/it.quantity;amount+=it.line_total*prop;it.refunded_qty+=qty;
             if(it.product_id)adjustStock(it.product_id,qty*(it.pack_units||1),"return","Refund "+r.receipt_no);}});
         var remaining=r.items.reduce(function(s,it){return s+(it.quantity-it.refunded_qty);},0);r.status=remaining<=0?"refunded":"partial_refund";
-        DB.save();log("refund","sale",r.receipt_no+" amount="+Math.round(amount*100)/100);toast("Refunded "+money(amount),"success");load();}}],{large:true});}
+        /* Revenue, tax, cost and profit must drop by what went back. */
+        recalcSaleTotals(r);
+        /* A credit sale that is partly returned owes less. */
+        if(r.customer_id){var cust=DB.data.customers.filter(function(x){return x.id===r.customer_id;})[0];
+          if(cust){if(r.payment_method==="credit")cust.credit=Math.max(0,round2(cust.credit-amount));
+            cust.loyalty_pts=Math.max(0,cust.loyalty_pts-Math.floor(amount));}}
+        DB.save();log("refund","sale",r.receipt_no+" amount="+round2(amount));toast("Refunded "+money(amount),"success");load();}}],{large:true});}
 }};
 
 /* ---- Users / Settings / Backup ---- */
@@ -2619,6 +2740,14 @@ VIEWS.users={title:function(){return t("nav.users");},render:function(root){
           var b=el("button",{class:"btn btn-ghost",text:"⬆ Restore Backup",onClick:function(){fi.click();}});return el("span",{},[b,fi]);})(),
         el("button",{class:"btn btn-danger",text:"🗑 Reset All Data",onClick:function(){confirmModal("Erase ALL data and reload sample data? This cannot be undone.",function(){DB.reset();toast("Data reset","success");
           SESSION.user=null;boot();});}})])]));
+    var used=DB.usage();var pct=Math.min(100,Math.round(used/5242880*100));
+    body.appendChild(el("div",{class:"card mt"},[el("h3",{class:"mb",text:"Browser storage"}),
+      el("div",{class:"flex",style:"justify-content:space-between"},[
+        el("span",{class:"hint",text:(used/1024).toFixed(0)+" KB used of roughly 5 MB"}),
+        el("span",{class:"badge badge-"+(pct>85?"red":(pct>60?"orange":"green")),text:pct+"%"})]),
+      el("div",{style:"height:8px;border-radius:99px;background:var(--surface-3);margin-top:8px;overflow:hidden"},
+        el("div",{style:"height:100%;width:"+pct+"%;background:var("+(pct>85?"--danger":(pct>60?"--warning":"--success"))+")"})),
+      pct>85?el("div",{class:"banner banner-warn mt",text:"Storage is nearly full. Export a backup, then remove product photos or delete old sales."}):null]));
     body.appendChild(el("div",{class:"card mt"},[el("h3",{class:"mb",text:"Data Summary"}),
       table([{key:"k",label:"Entity"},{key:"v",label:"Records",num:true}],[["Products",DB.data.products.length],["Sales",DB.data.sales.length],
         ["Customers",DB.data.customers.length],["Suppliers",DB.data.suppliers.length],["Purchases",DB.data.purchases.length],
@@ -2633,7 +2762,7 @@ VIEWS.settings={title:function(){return t("nav.settings");},render:function(root
     {name:"scale_enabled",label:"Scale barcodes",type:"select",options:[{value:"1",label:"Enabled"},{value:"0",label:"Disabled"}]},
     {name:"scale_mode",label:"Scale label carries",type:"select",options:[{value:"price",label:"Price"},{value:"weight",label:"Weight"}]},
     {name:"scale_prefix",label:"Scale prefix (e.g. 2 or 20)"},
-    {name:"scale_plu_len",label:"PLU digits",type:"number",step:"1"},
+    {name:"scale_plu_len",label:"PLU digits (prefix+PLU+value+1 must equal 13)",type:"number",step:"1"},
     {name:"scale_value_len",label:"Value digits",type:"number",step:"1"},
     {name:"scale_price_divisor",label:"Price divisor (100 = cents)",type:"number",step:"1"},
     {name:"scale_weight_divisor",label:"Weight divisor (1000 = grams→kg)",type:"number",step:"1"}],s);
