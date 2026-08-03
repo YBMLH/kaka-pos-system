@@ -96,6 +96,14 @@ label{font-size:12.5px;color:var(--text-muted);font-weight:550}
   align-items:center;justify-content:center;transition:.15s;flex-shrink:0}
 .icon-btn:hover{background:var(--surface-3);border-color:var(--border-strong)}
 .mini-select{padding:8px 30px 8px 11px;width:auto;font-size:13px;font-weight:600}
+.save-chip{border:1.5px solid var(--border);background:var(--surface-2);color:var(--text-muted);
+  border-radius:var(--radius-pill);padding:7px 13px;font-size:12px;font-weight:650;cursor:pointer;
+  font-family:inherit;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis;transition:.15s}
+.save-chip:hover{border-color:var(--border-strong)}
+.save-chip.ok{background:var(--success-soft);color:var(--success);border-color:transparent}
+.save-chip.warn{background:var(--warning-soft);color:var(--warning);border-color:transparent}
+.save-chip.bad{background:var(--danger-soft);color:var(--danger);border-color:transparent}
+@media(max-width:900px){.save-chip{max-width:110px}}
 
 /* ---- Login ---- */
 .login-body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;
@@ -421,6 +429,106 @@ var ROLE_LABELS={administrator:"Administrator",manager:"Manager",cashier:"Cashie
 function hashPw(s){/* demo-grade only — client-side hashing is not real security */
   var h=5381;for(var i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))|0;}return "h"+(h>>>0).toString(16);}
 
+/* ---------- Data file on the PC ----------------------------------------
+   The app can own a real file on disk (via the File System Access API) and
+   rewrite it after every change, so the till's data lives next to the app
+   instead of inside the browser. The chosen file is remembered in IndexedDB,
+   so reopening the app reconnects to it. localStorage is still written as a
+   mirror, so nothing is lost if the file is disconnected or unsupported. */
+var IDB_NAME="kaka_pos_fs",IDB_STORE="handles";
+function idbOpen(){return new Promise(function(res,rej){
+  var r=indexedDB.open(IDB_NAME,1);
+  r.onupgradeneeded=function(){r.result.createObjectStore(IDB_STORE);};
+  r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};});}
+function idbSet(key,val){return idbOpen().then(function(db){return new Promise(function(res,rej){
+  var tx=db.transaction(IDB_STORE,"readwrite");tx.objectStore(IDB_STORE).put(val,key);
+  tx.oncomplete=function(){res(true);};tx.onerror=function(){rej(tx.error);};});});}
+function idbGet(key){return idbOpen().then(function(db){return new Promise(function(res,rej){
+  var tx=db.transaction(IDB_STORE,"readonly");var rq=tx.objectStore(IDB_STORE).get(key);
+  rq.onsuccess=function(){res(rq.result);};rq.onerror=function(){rej(rq.error);};});});}
+function idbDel(key){return idbOpen().then(function(db){return new Promise(function(res,rej){
+  var tx=db.transaction(IDB_STORE,"readwrite");tx.objectStore(IDB_STORE).delete(key);
+  tx.oncomplete=function(){res(true);};tx.onerror=function(){rej(tx.error);};});});}
+
+var FileStore={
+  handle:null,
+  name:"",
+  status:"off",          /* off | connected | saving | saved | error | denied */
+  lastSaved:null,
+  lastError:"",
+  _chain:Promise.resolve(),   /* serialises writes so they cannot interleave */
+  _pending:null,
+  supported:function(){
+    return typeof window.showSaveFilePicker==="function"&&
+           typeof window.showOpenFilePicker==="function"&&
+           typeof indexedDB!=="undefined";},
+  setStatus:function(st,err){this.status=st;this.lastError=err||"";
+    if(st==="saved")this.lastSaved=new Date();
+    if(typeof updateSaveChip==="function")updateSaveChip();},
+  /* Reconnect to the remembered file, if permission is still granted. */
+  restore:function(){var self=this;
+    if(!this.supported())return Promise.resolve(false);
+    return idbGet("dataFile").then(function(h){
+      if(!h)return false;
+      self.handle=h;self.name=h.name||"data file";
+      if(!h.queryPermission)return false;
+      return h.queryPermission({mode:"readwrite"}).then(function(p){
+        if(p==="granted"){self.setStatus("connected");return true;}
+        self.setStatus("denied");return false;});
+    }).catch(function(){return false;});},
+  /* Ask again for access — needs a user gesture, so call it from a click. */
+  regrant:function(){var self=this;
+    if(!this.handle||!this.handle.requestPermission)return Promise.resolve(false);
+    return this.handle.requestPermission({mode:"readwrite"}).then(function(p){
+      if(p==="granted"){self.setStatus("connected");return true;}
+      self.setStatus("denied");return false;});},
+  /* Remembering the handle is a convenience — if it fails (private mode, no
+     IndexedDB) the file still works for this session, so never let it abort
+     the connection. */
+  remember:function(h){return idbSet("dataFile",h).catch(function(){
+    try{toast("This file will be used now, but the app cannot remember it for next time.","error");}catch(e){}
+    return false;});},
+  create:function(suggested){var self=this;
+    return window.showSaveFilePicker({
+      suggestedName:suggested||("kaka-pos-data.json"),
+      types:[{description:"KAKA POS data",accept:{"application/json":[".json"]}}]
+    }).then(function(h){
+      self.handle=h;self.name=h.name;self.setStatus("connected");
+      return self.remember(h);
+    }).then(function(){return DB.flush();}).then(function(){return true;});},
+  openExisting:function(){var self=this;
+    return window.showOpenFilePicker({multiple:false,
+      types:[{description:"KAKA POS data",accept:{"application/json":[".json"]}}]
+    }).then(function(list){
+      var h=list[0];self.handle=h;self.name=h.name;
+      return self.remember(h).then(function(){return self.read();});
+    }).then(function(parsed){self.setStatus("connected");return parsed;});},
+  read:function(){var self=this;
+    if(!this.handle)return Promise.resolve(null);
+    return this.handle.getFile().then(function(f){return f.text();}).then(function(txt){
+      if(!txt||!txt.trim())return null;
+      try{return JSON.parse(txt);}catch(e){
+        self.setStatus("error","The data file is not valid JSON");return null;}});},
+  /* Every write is queued behind the previous one. */
+  write:function(data,immediate){var self=this;
+    if(!this.handle)return Promise.resolve(false);
+    var payload=JSON.stringify(data);
+    this._chain=this._chain.then(function(){
+      self.setStatus("saving");
+      return self.handle.createWritable().then(function(w){
+        return w.write(payload).then(function(){return w.close();});
+      }).then(function(){self.setStatus("saved");return true;})
+        .catch(function(e){
+          var denied=e&&(e.name==="NotAllowedError"||e.name==="SecurityError");
+          self.setStatus(denied?"denied":"error",(e&&e.message)||String(e));
+          if(denied)try{toast("Lost write access to the data file — reconnect it in Backup & Data.","error");}catch(_){}
+          return false;});
+    });
+    return this._chain;},
+  disconnect:function(){this.handle=null;this.name="";this.setStatus("off");
+    return idbDel("dataFile").catch(function(){});}
+};
+
 var DB={
   data:null,
   load:function(){try{this.data=JSON.parse(localStorage.getItem(STORE_KEY));}catch(e){this.data=null;}
@@ -454,13 +562,31 @@ var DB={
      cashier has to know immediately, because the sale they just rang up would
      otherwise be lost on refresh. */
   save:function(){
-    try{localStorage.setItem(STORE_KEY,JSON.stringify(this.data));this.saveFailed=false;return true;}
+    /* When a data file is connected it is the real home of the data; the
+       browser copy is kept as a mirror so nothing is lost if the file is
+       later disconnected. */
+    var fileOk=true;
+    if(FileStore.handle)fileOk=this.saveToFile();
+    var lsOk=true;
+    try{localStorage.setItem(STORE_KEY,JSON.stringify(this.data));this.saveFailed=false;}
     catch(e){
-      this.saveFailed=true;
+      lsOk=false;this.saveFailed=true;
       var full=(e&&(e.name==="QuotaExceededError"||e.code===22||e.code===1014));
-      try{toast(full?"STORAGE FULL — this change was NOT saved. Export a backup, then remove product photos or old sales."
-                    :"Could not save data: "+(e&&e.message||e),"error");}catch(_){}
-      return false;}},
+      /* With a data file connected, a full browser cache is only a mirror
+         problem — do not alarm the cashier about a save that did happen. */
+      if(!FileStore.handle){
+        try{toast(full?"STORAGE FULL — this change was NOT saved. Connect a data file in Backup & Data, or export a backup."
+                      :"Could not save data: "+(e&&e.message||e),"error");}catch(_){}}}
+    return fileOk&&(lsOk||!!FileStore.handle);},
+  /* Coalesce rapid changes into one disk write, but keep it near-instant. */
+  saveToFile:function(){
+    var self=this;
+    clearTimeout(this._fileTimer);
+    this._fileTimer=setTimeout(function(){FileStore.write(self.data);},120);
+    return true;},
+  /* Force any queued write to disk right now (used before unload). */
+  flush:function(){clearTimeout(this._fileTimer);
+    return FileStore.handle?FileStore.write(this.data):Promise.resolve(true);},
   /* Rough share of the ~5 MB localStorage budget currently in use. */
   usage:function(){try{return JSON.stringify(this.data).length;}catch(e){return 0;}},
   reset:function(){localStorage.removeItem(STORE_KEY);this.data=null;this.seed();},
@@ -2843,7 +2969,64 @@ VIEWS.users={title:function(){return t("nav.users");},render:function(root){
   function activityT(){body.appendChild(el("div",{class:"card"},[el("h3",{class:"mb",text:"Audit Trail"}),
     table([{key:"created_at",label:t("common.date"),render:function(r){return fmtDate(r.created_at);}},{key:"user",label:"User"},
       {key:"action",label:"Action",render:function(r){return badge(r.action,"blue");}},{key:"entity",label:"Entity"},{key:"detail",label:"Detail"}],DB.data.activity.slice(0,500),{empty:"No activity"})]));}
-  function backupT(){body.appendChild(el("div",{class:"banner",html:"All data lives in <strong>this browser only</strong> (localStorage). Export a backup file regularly, especially before clearing browser data or switching devices."}));
+  function backupT(){
+    /* ---- Data file on this PC ---- */
+    var fileCard=el("div",{class:"card mb"});
+    function drawFile(){
+      clear(fileCard);
+      var supported=FileStore.supported();
+      fileCard.appendChild(el("div",{class:"section-head"},[el("h3",{text:"💾 Data file on this computer"}),
+        el("span",{class:"badge badge-"+(FileStore.handle?(FileStore.status==="denied"||FileStore.status==="error"?"red":"green"):"orange"),
+          text:FileStore.handle?(FileStore.status==="denied"?"needs reconnecting":(FileStore.status==="error"?"error":"connected")):"not connected"})]));
+      if(!supported){
+        fileCard.appendChild(el("div",{class:"banner banner-warn",
+          html:"This browser cannot write files directly. Use <strong>Chrome or Edge on desktop</strong> for a data file, "+
+               "or keep using Export/Import backups below."}));
+        return;}
+      if(FileStore.handle){
+        fileCard.appendChild(el("div",{class:"list-row"},[el("span",{class:"hint",text:"File"}),
+          el("strong",{text:FileStore.name})]));
+        fileCard.appendChild(el("div",{class:"list-row"},[el("span",{class:"hint",text:"Last written"}),
+          el("span",{text:FileStore.lastSaved?FileStore.lastSaved.toLocaleString():"—"})]));
+        if(FileStore.lastError)fileCard.appendChild(el("div",{class:"banner banner-warn mt",text:FileStore.lastError}));
+        if(FileStore.status==="denied")
+          fileCard.appendChild(el("div",{class:"banner banner-warn mt",
+            text:"The browser needs your permission again before it can write this file."}));
+        fileCard.appendChild(el("div",{class:"flex mt",style:"flex-wrap:wrap"},[
+          FileStore.status==="denied"?el("button",{class:"btn btn-primary",text:"🔓 Reconnect file",onClick:function(){
+            FileStore.regrant().then(function(ok){
+              if(ok){DB.flush();toast("Reconnected — saving to "+FileStore.name,"success");}
+              else toast("Permission denied","error");drawFile();});}}):null,
+          el("button",{class:"btn btn-ghost",text:"💾 Save now",onClick:function(){
+            DB.flush().then(function(){toast("Written to "+FileStore.name,"success");drawFile();});}}),
+          el("button",{class:"btn btn-ghost",text:"📂 Use a different file",onClick:chooseExisting}),
+          el("button",{class:"btn btn-ghost",text:"✕ Disconnect",onClick:function(){
+            confirmModal("Stop saving to "+FileStore.name+"? Data stays in this browser and in the file as it is now.",function(){
+              FileStore.disconnect().then(function(){toast("Disconnected","success");drawFile();});});}})]));}
+      else{
+        fileCard.appendChild(el("div",{class:"banner",
+          html:"Keep your till data in a real file on this PC. It is written after every change, and the app reconnects to it automatically next time you open it."}));
+        fileCard.appendChild(el("div",{class:"flex",style:"flex-wrap:wrap"},[
+          el("button",{class:"btn btn-primary",text:"➕ Create a data file…",onClick:function(){
+            FileStore.create("kaka-pos-data.json").then(function(){
+              toast("Now saving to "+FileStore.name,"success");drawFile();
+            }).catch(function(e){if(e&&e.name!=="AbortError")toast("Could not create the file: "+(e.message||e),"error");});}}),
+          el("button",{class:"btn btn-ghost",text:"📂 Open an existing data file…",onClick:chooseExisting})]));}}
+    function chooseExisting(){
+      FileStore.openExisting().then(function(parsed){
+        if(parsed&&parsed.products&&parsed.settings){
+          confirmModal("Load the data from "+FileStore.name+"? It replaces what is currently in this browser.",function(){
+            DB.data=parsed;DB.migrate();DB.save();
+            toast("Loaded "+FileStore.name,"success");
+            drawFile();render();});
+        }else{
+          /* Empty or unrelated file — adopt it as the destination instead. */
+          DB.flush().then(function(){toast("Now saving to "+FileStore.name,"success");drawFile();});}
+      }).catch(function(e){if(e&&e.name!=="AbortError")toast("Could not open the file: "+(e.message||e),"error");});}
+    drawFile();body.appendChild(fileCard);
+    body.appendChild(el("div",{class:"banner",html:FileStore.handle
+      ? "Data is saved to <strong>"+esc(FileStore.name)+"</strong> after every change, with a copy kept in this browser as a fallback."
+      : "All data lives in <strong>this browser only</strong>. Connect a data file above, or export a backup regularly."}));
     body.appendChild(el("div",{class:"card"},[el("h3",{class:"mb",text:"Backup & Restore"}),
       el("div",{class:"flex",style:"flex-wrap:wrap"},[
         el("button",{class:"btn btn-primary",text:"💾 Export Backup (.json)",onClick:function(){var blob=new Blob([JSON.stringify(DB.data)],{type:"application/json"});
@@ -2973,14 +3156,31 @@ function renderShell(){var root=document.getElementById("root");document.body.cl
   var topbar=el("header",{class:"topbar"},[
     el("button",{class:"icon-btn",id:"menu-toggle",text:"☰",onClick:function(e){e.stopPropagation();document.getElementById("sidebar").classList.toggle("open");}}),
     el("div",{style:"min-width:0"},[el("h2",{id:"page-title"}),el("div",{class:"page-sub",id:"page-sub"})]),
-    el("div",{class:"topbar-actions"},[langSel,
+    el("div",{class:"topbar-actions"},[
+      el("button",{class:"save-chip",id:"save-chip",title:"Where your data is stored",
+        onClick:function(){location.hash="#/users";setTimeout(function(){
+          var tabs=document.querySelectorAll(".view .tab");if(tabs[2])tabs[2].click();},350);}}),
+      langSel,
       el("button",{class:"icon-btn",title:"Toggle theme",text:SESSION.theme==="dark"?"☀️":"🌙",
         onClick:function(e){var next=SESSION.theme==="light"?"dark":"light";applyTheme(next);e.currentTarget.textContent=next==="dark"?"☀️":"🌙";}}),
       el("div",{class:"dropdown"},[el("button",{class:"icon-btn",text:"⋯",title:"Account",
         onClick:function(e){e.stopPropagation();userMenu.classList.toggle("open");}}),userMenu])])]);
   document.addEventListener("click",function(){userMenu.classList.remove("open");
     var sb=document.getElementById("sidebar");if(sb&&window.innerWidth<=900)sb.classList.remove("open");});
-  root.appendChild(el("div",{class:"app-shell"},[sidebar,el("div",{class:"main"},[topbar,el("main",{class:"view",id:"view"})])]));}
+  root.appendChild(el("div",{class:"app-shell"},[sidebar,el("div",{class:"main"},[topbar,el("main",{class:"view",id:"view"})])]));
+  updateSaveChip();}
+/* Small always-visible indicator of where data is going. */
+function updateSaveChip(){
+  var chip=document.getElementById("save-chip");if(!chip)return;
+  var st=FileStore.status,map={
+    off:{cls:"warn",txt:"💾 Browser only",title:"Data is in this browser. Connect a file on this PC in Backup & Data."},
+    connected:{cls:"ok",txt:"💾 "+FileStore.name,title:"Saving to "+FileStore.name},
+    saving:{cls:"ok",txt:"💾 Saving…",title:"Writing to "+FileStore.name},
+    saved:{cls:"ok",txt:"💾 Saved",title:"Saved to "+FileStore.name+(FileStore.lastSaved?(" at "+FileStore.lastSaved.toLocaleTimeString()):"")},
+    denied:{cls:"bad",txt:"⚠ Reconnect file",title:"Permission to write the data file was lost. Click to reconnect."},
+    error:{cls:"bad",txt:"⚠ Not saved",title:FileStore.lastError||"Could not write the data file"}};
+  var m=map[st]||map.off;
+  chip.className="save-chip "+m.cls;chip.textContent=m.txt;chip.title=m.title;}
 
 function changePassword(){var form=buildForm([{name:"current",label:"Current Password",type:"password",full:true},
   {name:"next",label:"New Password",type:"password",full:true}]);
@@ -3011,7 +3211,27 @@ function boot(){DB.load();
   window.onhashchange=route;
   if(!location.hash)location.hash="#/dashboard";route();}
 
-DB.load();boot();
+/* Reconnect to the data file (if any) before the first render, so the app
+   starts from what is on disk rather than the browser mirror. */
+function start(){
+  if(!FileStore.supported()){DB.load();boot();return;}
+  FileStore.restore().then(function(ok){
+    if(!ok)return null;
+    return FileStore.read();
+  }).then(function(fileData){
+    if(fileData&&fileData.products&&fileData.settings){
+      DB.data=fileData;DB.migrate();
+      try{localStorage.setItem(STORE_KEY,JSON.stringify(DB.data));}catch(e){}
+      FileStore.setStatus("saved");
+    }else{DB.load();}
+    boot();
+  }).catch(function(){DB.load();boot();});}
+
+/* Never leave a queued write unfinished. */
+window.addEventListener("beforeunload",function(){
+  if(FileStore.handle){clearTimeout(DB._fileTimer);FileStore.write(DB.data);}});
+
+start();
 </script>
 </body>
 </html>

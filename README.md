@@ -31,10 +31,30 @@ cashier / cashier123    (cashier — demo)
 Sample products are seeded on first run. Change the admin password from the
 account menu, then make it yours in **Settings**.
 
-> **Back up your data.** Everything lives in that browser's local storage.
-> **Users → Backup & Data → Export Backup** writes a `.json` you can restore
-> anywhere. Do this before clearing browser data or moving to another device.
-> The same screen shows a storage meter and warns before you run out of space.
+### Save to a file on the PC (recommended)
+
+Go to **Users → Backup & Data → Create a data file…**, pick where to save it
+(e.g. `D:\KakaPOS\shop-data.json`), and from then on the app **writes that file
+after every change** — every sale, price edit and stock movement. Reopen the app
+later and it reconnects to the same file automatically.
+
+The top bar always shows where your data is going:
+
+| Chip | Meaning |
+|------|---------|
+| 💾 **Saved** / filename | Writing to your file — all good |
+| 💾 **Browser only** | No file connected; data is only in this browser |
+| ⚠ **Reconnect file** | The browser needs permission again — click to restore |
+| ⚠ **Not saved** | A write failed; the message says why |
+
+Because it is a normal file you can put it on a USB stick, a shared folder, or
+anything your usual PC backup already copies. **Open an existing data file…**
+loads it back on any machine.
+
+> Writing files needs **Chrome or Edge on desktop**. Other browsers keep using
+> browser storage — the app says so, and Export/Import backups still work.
+> A copy is always kept in the browser as a fallback, so a disconnected or
+> unsupported file never loses your data.
 
 ---
 
@@ -91,10 +111,13 @@ account menu, then make it yours in **Settings**.
 
 ## Limits to be aware of
 
-- Data is **per browser, per device**. It is not shared between tills. Use the
-  JSON backup to move or merge data.
-- Browser storage is roughly **5 MB**. That is thousands of products and sales,
-  but product **photos** consume it quickly — emoji placeholders are free.
+- With a data file connected, your data is a normal file you control. Without
+  one, it lives only in that browser on that device.
+- The data file is **one till's data**. Two tills writing the same file at the
+  same time would overwrite each other — give each its own file.
+- Browser storage (the fallback copy) is roughly **5 MB**. Product **photos**
+  consume it quickly; emoji placeholders are free. The data file itself is not
+  limited this way.
 - Passwords use a lightweight in-browser hash. It keeps staff out of each
   other's accounts; it is not protection against someone with the device and
   developer tools.
