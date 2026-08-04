@@ -96,6 +96,14 @@ label{font-size:12.5px;color:var(--text-muted);font-weight:550}
   align-items:center;justify-content:center;transition:.15s;flex-shrink:0}
 .icon-btn:hover{background:var(--surface-3);border-color:var(--border-strong)}
 .mini-select{padding:8px 30px 8px 11px;width:auto;font-size:13px;font-weight:600}
+.wiz-dots{display:flex;gap:7px;margin:12px 0 18px}
+.wiz-dot{width:34px;height:5px;border-radius:99px;background:var(--border)}
+.wiz-dot.active{background:var(--primary)}
+.wiz-dot.done{background:color-mix(in srgb,var(--primary) 45%,transparent)}
+.choice{display:flex;gap:14px;align-items:center;padding:16px;border:2px solid var(--border);
+  border-radius:var(--radius);cursor:pointer;margin-bottom:10px;transition:.15s;background:var(--surface)}
+.choice:hover{border-color:var(--border-strong)}
+.choice.active{border-color:var(--primary);background:var(--primary-soft)}
 .save-chip{border:1.5px solid var(--border);background:var(--surface-2);color:var(--text-muted);
   border-radius:var(--radius-pill);padding:7px 13px;font-size:12px;font-weight:650;cursor:pointer;
   font-family:inherit;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis;transition:.15s}
@@ -552,6 +560,8 @@ var DB={
     def(sd,"scale_price_divisor",100);def(sd,"scale_weight_divisor",1000);
     def(sd,"loyalty_enabled","1");def(sd,"loyalty_earn_per",1);
     def(sd,"loyalty_point_value",0.01);def(sd,"loyalty_min_redeem",100);
+    /* Anyone already using the app has effectively finished setup. */
+    def(sd,"setup_done","1");
     /* An earlier default added up to 12 digits, which is not a valid EAN-13.
        Repair it so scale labels parse. */
     if(String(sd.scale_prefix||"2").length+(parseInt(sd.scale_plu_len)||0)+(parseInt(sd.scale_value_len)||0)+1!==13){
@@ -618,7 +628,8 @@ var DB={
       receipt_footer:"Thank you for your visit!",
       scale_enabled:"1",scale_prefix:"2",scale_plu_len:6,scale_value_len:5,scale_mode:"price",
       scale_price_divisor:100,scale_weight_divisor:1000,
-      loyalty_enabled:"1",loyalty_earn_per:1,loyalty_point_value:0.01,loyalty_min_redeem:100},
+      loyalty_enabled:"1",loyalty_earn_per:1,loyalty_point_value:0.01,loyalty_min_redeem:100,
+      setup_done:""},
       users:[{id:1,username:"admin",full_name:"System Administrator",password:hashPw("admin123"),role:"administrator",active:1,last_login:null},
              {id:2,username:"cashier",full_name:"Demo Cashier",password:hashPw("cashier123"),role:"cashier",active:1,last_login:null}],
       categories:[],brands:[],suppliers:[
@@ -695,6 +706,145 @@ var I18N={"en":{"login.subtitle":"Offline Point of Sale & Business Management","
   for(var l in extra)for(var k in extra[l])x[l][k]=extra[l][k];})(I18N);
 function t(key){var d=I18N[SESSION.lang]||I18N.en;return d[key]||I18N.en[key]||key;}
 
+/* ---------- First-run setup -------------------------------------------
+   A shop owner opening this for the first time should not meet demo products
+   and a default password. This walks them through making it their own, and
+   never appears again once finished. */
+function needsSetup(){return String(DB.data.settings.setup_done||"")!=="1";}
+function usingDefaultAdminPassword(){
+  var a=DB.data.users.filter(function(u){return u.username==="admin";})[0];
+  return !!(a&&a.password===hashPw("admin123"));}
+function wipeBusinessData(){
+  var d=DB.data;
+  d.products=[];d.sales=[];d.customers=[];d.suppliers=[];d.purchases=[];
+  d.purchase_returns=[];d.expenses=[];d.movements=[];d.writeoffs=[];
+  d.registers=[];d.stocktakes=[];d.activity=[];d._held=[];
+  d.counters={sale:0,purchase:0};}
+function setupWizard(onDone){
+  var step=1,TOTAL=4;
+  var body=el("div",{});
+  var titleEl=el("h3",{});
+  var backBtn=el("button",{class:"btn btn-ghost",text:"← Back"});
+  var nextBtn=el("button",{class:"btn btn-primary",text:"Continue →"});
+  var dots=el("div",{class:"wiz-dots"});
+  var answers={lang:SESSION.lang,store:"",currency:"MAD",tax:20,clean:true,pw1:"",pw2:""};
+
+  var m=modal("",el("div",{},[titleEl,dots,body]),[],{large:true,sticky:true});
+  /* No escape hatch — setup must be completed. */
+  m.overlay.querySelector(".modal-close").style.display="none";
+  var foot=m.overlay.querySelector(".modal-foot");
+  foot.appendChild(backBtn);foot.appendChild(nextBtn);
+  backBtn.addEventListener("click",function(){if(step>1){step--;draw();}});
+  nextBtn.addEventListener("click",function(){if(validate())next();});
+
+  function drawDots(){clear(dots);
+    for(var i=1;i<=TOTAL;i++)dots.appendChild(el("span",{class:"wiz-dot"+(i===step?" active":(i<step?" done":""))}));}
+  function next(){if(step<TOTAL){step++;draw();}else finish();}
+
+  var refs={};
+  function draw(){
+    clear(body);drawDots();
+    backBtn.style.visibility=step>1?"visible":"hidden";
+    nextBtn.textContent=step===TOTAL?"Finish setup ✓":"Continue →";
+    if(step===1){
+      titleEl.textContent="Welcome — let's set up your shop";
+      var langRow=el("div",{class:"chip-row mb"});
+      [["en","English"],["fr","Français"],["ar","العربية"]].forEach(function(L){
+        langRow.appendChild(el("button",{class:"chip"+(answers.lang===L[0]?" active":""),text:L[1],
+          onClick:function(){answers.lang=L[0];applyLang(L[0]);draw();}}));});
+      refs.store=el("input",{value:answers.store,placeholder:"e.g. Marché Al Baraka"});
+      refs.currency=el("input",{value:answers.currency,placeholder:"MAD"});
+      refs.tax=el("input",{type:"number",step:"0.01",value:answers.tax});
+      refs.phone=el("input",{value:"",placeholder:"optional"});
+      refs.address=el("input",{value:"",placeholder:"optional"});
+      body.appendChild(el("div",{},[
+        el("p",{class:"hint mb",text:"These appear on your receipts and throughout the app."}),
+        el("label",{text:"Language"}),langRow,
+        el("div",{class:"form-grid"},[
+          el("div",{class:"field full"},[el("label",{text:"Shop name *"}),refs.store]),
+          el("div",{class:"field"},[el("label",{text:"Currency *"}),refs.currency]),
+          el("div",{class:"field"},[el("label",{text:"Default tax %"}),refs.tax]),
+          el("div",{class:"field"},[el("label",{text:"Phone"}),refs.phone]),
+          el("div",{class:"field"},[el("label",{text:"Address"}),refs.address])])]));
+      setTimeout(function(){refs.store.focus();},60);}
+    else if(step===2){
+      titleEl.textContent="Where should your data be kept?";
+      var status=el("div",{});
+      function drawStatus(){clear(status);
+        if(FileStore.handle)status.appendChild(el("div",{class:"banner",
+          html:"✅ Saving to <strong>"+esc(FileStore.name)+"</strong> after every change."}));
+        else if(!FileStore.supported())status.appendChild(el("div",{class:"banner banner-warn",
+          html:"This browser cannot write files directly. Your data will be kept inside the browser — "+
+               "use <strong>Chrome or Edge</strong> for a data file, and export backups regularly."}));
+        else status.appendChild(el("div",{class:"banner banner-warn",
+          html:"⚠ No file yet. Without one your data lives only inside this browser and is lost if it is cleared."}));}
+      drawStatus();
+      body.appendChild(el("div",{},[
+        el("p",{class:"hint mb",text:"Strongly recommended: keep your data in a file on this computer. It is written after every sale and reconnects automatically each time you open the app."}),
+        status,
+        FileStore.supported()?el("div",{class:"flex",style:"flex-wrap:wrap"},[
+          el("button",{class:"btn btn-primary",text:"➕ Create data file…",onClick:function(){
+            FileStore.create((answers.store||"kaka-pos")+"-data.json").then(function(){
+              toast("Saving to "+FileStore.name,"success");drawStatus();
+            }).catch(function(e){if(e&&e.name!=="AbortError")toast("Could not create the file","error");});}}),
+          el("button",{class:"btn btn-ghost",text:"📂 Open existing…",onClick:function(){
+            FileStore.openExisting().then(function(parsed){
+              if(parsed&&parsed.products){DB.data=parsed;DB.migrate();DB.save();
+                toast("Loaded existing data","success");m.close();if(onDone)onDone(true);}
+              else{DB.flush();drawStatus();}
+            }).catch(function(e){if(e&&e.name!=="AbortError")toast("Could not open the file","error");});}})]):null]));}
+    else if(step===3){
+      titleEl.textContent="Secure the administrator account";
+      refs.pw1=el("input",{type:"password",placeholder:"At least 6 characters"});
+      refs.pw2=el("input",{type:"password",placeholder:"Repeat it"});
+      body.appendChild(el("div",{},[
+        el("div",{class:"banner banner-warn mb",
+          html:"The <strong>admin</strong> account still uses the default password. Anyone who knows it could open your books — please change it now."}),
+        el("div",{class:"form-grid"},[
+          el("div",{class:"field full"},[el("label",{text:"New admin password *"}),refs.pw1]),
+          el("div",{class:"field full"},[el("label",{text:"Confirm password *"}),refs.pw2])]),
+        el("p",{class:"hint mt",text:"Write it down somewhere safe — there is no email recovery in an offline app."})]));
+      setTimeout(function(){refs.pw1.focus();},60);}
+    else{
+      titleEl.textContent="Start with your own products?";
+      function card(clean,icon,title,desc){
+        return el("div",{class:"choice"+(answers.clean===clean?" active":""),onClick:function(){answers.clean=clean;draw();}},[
+          el("div",{style:"font-size:26px",text:icon}),
+          el("div",{},[el("div",{style:"font-weight:650",text:title}),el("div",{class:"hint",text:desc})])]);}
+      body.appendChild(el("div",{},[
+        el("p",{class:"hint mb",text:"The app currently contains example products so you can try it out."}),
+        card(true,"🧹","Clear the examples","Start with an empty shop. Add your products by scanning them, or import a CSV."),
+        card(false,"📦","Keep the examples","Handy for training staff. You can delete them later from Products.")]));}
+  }
+  function validate(){
+    if(step===1){
+      var v=(refs.store.value||"").trim();
+      if(!v){toast("Please enter your shop name","error");refs.store.focus();return false;}
+      answers.store=v;answers.currency=(refs.currency.value||"MAD").trim()||"MAD";
+      answers.tax=parseFloat(refs.tax.value)||0;
+      answers.phone=refs.phone.value;answers.address=refs.address.value;
+      if(answers.tax<0){toast("Tax cannot be negative","error");return false;}
+      return true;}
+    if(step===3){
+      var a=refs.pw1.value,b2=refs.pw2.value;
+      if(a.length<6){toast("Password must be at least 6 characters","error");return false;}
+      if(a!==b2){toast("The two passwords do not match","error");return false;}
+      answers.pw1=a;return true;}
+    return true;}
+  function finish(){
+    var st=DB.data.settings;
+    st.store_name=answers.store;st.currency=answers.currency;st.tax_rate=answers.tax;
+    st.store_phone=answers.phone||"";st.store_address=answers.address||"";
+    st.language=answers.lang;st.setup_done="1";
+    var admin=DB.data.users.filter(function(u){return u.username==="admin";})[0];
+    if(admin&&answers.pw1)admin.password=hashPw(answers.pw1);
+    if(answers.clean)wipeBusinessData();
+    DB.save();log("setup_complete","settings",answers.store);
+    m.close();
+    toast("All set — "+answers.store+" is ready","success");
+    if(onDone)onDone(true);}
+  draw();}
+
 /* ---------- DOM helpers ------------------------------------------------- */
 function el(tag,attrs,children){var n=document.createElement(tag);
   if(attrs)for(var k in attrs){var v=attrs[k];if(v==null||v===false)continue;
@@ -720,7 +870,10 @@ function modal(title,content,buttons,opts){opts=opts||{};
     el("div",{class:"modal-head"},[el("h3",{text:title}),el("button",{class:"modal-close",html:"&times;",onClick:close})]),
     el("div",{class:"modal-body"},content),foot]);
   overlay.appendChild(box);overlay.addEventListener("click",function(e){if(e.target===overlay&&!opts.sticky)close();});
-  root.appendChild(overlay);return{close:close};}
+  root.appendChild(overlay);
+  /* Callers need the overlay to tweak the shell (sticky dialogs, custom
+     footers) and to clean up on dismissal. */
+  return{close:close,overlay:overlay,box:box};}
 function confirmModal(message,onYes){modal(t("common.confirm"),el("p",{text:message}),[
   {label:t("common.cancel"),class:"btn-ghost"},{label:t("common.yes"),class:"btn-danger",onClick:onYes}]);}
 function buildForm(fields,initial){initial=initial||{};var grid=el("div",{class:"form-grid"});var inputs={};
@@ -1285,10 +1438,24 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
     var fields=el("div",{});var summary=el("div",{class:"flex",style:"justify-content:space-between;margin-top:12px"});
     var ref={};
     function build(){var mth=methodSel.value;clear(fields);clear(summary);ref={};
-      if(mth==="cash"){ref.paid=el("input",{type:"number",step:"0.01",value:payable().toFixed(2),style:"font-size:20px"});
+      if(mth==="cash"){ref.paid=el("input",{type:"number",step:"0.01",value:payable().toFixed(2),style:"font-size:22px;font-weight:700;text-align:center"});
+        var ch=el("strong",{text:money(0),style:"font-size:18px"});
+        function recalcChange(){ch.textContent=money(Math.max((parseFloat(ref.paid.value)||0)-payable(),0));}
+        ref.paid.addEventListener("input",recalcChange);
+        /* Quick cash: exact amount plus the notes a cashier is handed most. */
+        var due=payable();
+        var quick=el("div",{class:"chip-row mb"});
+        var notes=[];
+        [20,50,100,200,500].forEach(function(n){if(n>due&&notes.length<4)notes.push(n);});
+        if(!notes.length)notes=[Math.ceil(due/50)*50,Math.ceil(due/100)*100];
+        quick.appendChild(el("button",{class:"chip active",text:"Exact "+money(due),
+          onClick:function(){ref.paid.value=due.toFixed(2);recalcChange();}}));
+        notes.slice(0,4).forEach(function(n){quick.appendChild(el("button",{class:"chip",text:money(n),
+          onClick:function(){ref.paid.value=Number(n).toFixed(2);recalcChange();}}));});
         fields.appendChild(el("div",{class:"field"},[el("label",{text:"Cash tendered"}),ref.paid]));
-        var ch=el("strong",{text:money(0)});ref.paid.addEventListener("input",function(){ch.textContent=money(Math.max((parseFloat(ref.paid.value)||0)-payable(),0));});
-        summary.appendChild(el("span",{class:"muted",text:t("pos.change")}));summary.appendChild(ch);setTimeout(function(){ref.paid.select();},40);}
+        fields.appendChild(quick);
+        summary.appendChild(el("span",{class:"muted",text:t("pos.change")}));summary.appendChild(ch);
+        setTimeout(function(){ref.paid.select();},40);}
       else if(mth==="card"||mth==="transfer"){summary.appendChild(el("span",{class:"muted",text:"Paid in full"}));summary.appendChild(el("strong",{text:money(tot.total)}));}
       else if(mth==="mixed"){ref.cash=el("input",{type:"number",step:"0.01",value:"0"});ref.card=el("input",{type:"number",step:"0.01",value:payable().toFixed(2)});
         fields.appendChild(el("div",{class:"form-grid"},[el("div",{class:"field"},[el("label",{text:"Cash"}),ref.cash]),el("div",{class:"field"},[el("label",{text:"Card"}),ref.card])]));
@@ -1917,8 +2084,9 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
     DB.data.categories.map(function(c){return el("option",{value:c.id},c.name);})));
   var archFilter=el("select",{style:"width:auto"},[el("option",{value:"0"},"Active"),el("option",{value:"1"},"Archived")]);
   var lowBtn=el("button",{class:"btn btn-ghost btn-sm",text:"⚠ Low stock",onClick:function(){state.low=!state.low;
-    lowBtn.classList.toggle("btn-soft",state.low);lowBtn.classList.toggle("btn-ghost",!state.low);load();}});
+    lowBtn.classList.toggle("btn-soft",state.low);lowBtn.classList.toggle("btn-ghost",!state.low);page=1;load();}});
   var listHolder=el("div",{});
+  var page=1,PER=50;   /* declared before load() is first called */
   root.appendChild(el("div",{class:"toolbar"},[el("div",{class:"search-wrap"},search),catFilter,archFilter,lowBtn,
     el("span",{class:"spacer"}),
     can("products.edit")?el("button",{class:"btn btn-ghost btn-sm",text:"🏷 Categories",onClick:manageCategories}):null,
@@ -1927,9 +2095,9 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
     can("products.edit")?el("button",{class:"btn btn-soft",text:"📷 "+t("quick.scan_add"),onClick:scanToAdd}):null,
     can("products.edit")?el("button",{class:"btn btn-primary",text:"+ "+t("common.add"),onClick:function(){editModal(null);}}):null]));
   root.appendChild(listHolder);
-  var timer;search.addEventListener("input",function(){clearTimeout(timer);timer=setTimeout(function(){state.q=search.value.trim();load();},150);});
-  catFilter.addEventListener("change",function(){state.category_id=catFilter.value;load();});
-  archFilter.addEventListener("change",function(){state.archived=parseInt(archFilter.value);load();});
+  var timer;search.addEventListener("input",function(){clearTimeout(timer);timer=setTimeout(function(){state.q=search.value.trim();page=1;load();},150);});
+  catFilter.addEventListener("change",function(){state.category_id=catFilter.value;page=1;load();});
+  archFilter.addEventListener("change",function(){state.archived=parseInt(archFilter.value);page=1;load();});
   load();
   function filtered(){var norm=normalize(state.q);
     return DB.data.products.filter(function(p){if((p.archived?1:0)!==state.archived)return false;
@@ -1937,7 +2105,14 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
       if(state.low&&!(p.quantity<=p.min_stock))return false;
       if(state.q&&(p.search_blob||"").indexOf(norm)<0&&(p.barcode||"").indexOf(state.q)<0&&(p.sku||"").toLowerCase().indexOf(state.q.toLowerCase())<0)return false;
       return true;}).map(serializeProduct);}
-  function load(){var rows=filtered();clear(listHolder);
+  function load(){var all=filtered();
+    var pages=Math.max(1,Math.ceil(all.length/PER));
+    if(page>pages)page=pages;
+    var rows=all.slice((page-1)*PER,page*PER);
+    clear(listHolder);
+    listHolder.appendChild(el("div",{class:"flex mb",style:"justify-content:space-between;flex-wrap:wrap"},[
+      el("span",{class:"hint",text:all.length+" product(s)"+(all.length>PER?(" · showing "+((page-1)*PER+1)+"–"+Math.min(page*PER,all.length)):"")}),
+      el("span",{class:"hint",text:"Total stock value "+money(all.reduce(function(a2,p2){return a2+(p2.quantity||0)*(p2.purchase_price||0);},0))})]));
     listHolder.appendChild(table([
       {key:"name",label:t("common.name"),render:function(r){
         var ex=expiryState(r);
@@ -1962,7 +2137,8 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
           w.appendChild(iconAction("🗑️","Write off damaged / expired stock",function(){writeOffModal(r,load);}));
           if(r.archived)w.appendChild(iconAction("♻️","Restore",function(){setArch(r.id,0);}));
           else w.appendChild(iconAction("🗑","Archive",function(){confirmModal("Archive '"+(r.name_en||r.name_ar)+"'?",function(){setArch(r.id,1);});}));}
-        return w;}}],rows,{empty:"No products"}));}
+        return w;}}],rows,{empty:"No products"}));
+    listHolder.appendChild(pager({page:page,pages:pages},function(pp){page=pp;load();}));}
   function setArch(id,v){DB.data.products.filter(function(p){return p.id===id;})[0].archived=v;DB.save();log(v?"archive_product":"restore_product","product",id);load();}
   /* Scan-to-add: focus a field, scan the barcode on the item, continue into
      the quick-add form. Handheld scanners type the digits then press Enter. */
@@ -3068,6 +3244,10 @@ VIEWS.settings={title:function(){return t("nav.settings");},render:function(root
     {name:"loyalty_point_value",label:"Value of 1 point",type:"number",step:"0.001"},
     {name:"loyalty_min_redeem",label:"Minimum points to redeem",type:"number",step:"1"}],s);
   root.appendChild(el("div",{class:"card",style:"max-width:760px"},[el("h3",{class:"mb",text:"Store Settings"}),form.node,
+    el("div",{class:"flex mt",style:"flex-wrap:wrap"},[
+      el("button",{class:"btn btn-ghost btn-sm",text:"🧭 Re-run setup wizard",onClick:function(){
+        setupWizard(function(){render();});}}),
+      el("button",{class:"btn btn-ghost btn-sm",text:"❓ Help & shortcuts",onClick:helpModal})]),
     el("button",{class:"btn btn-primary mt",text:t("common.save"),onClick:function(){var v=form.values();
       v.tax_rate=parseFloat(v.tax_rate)||0;v.zakat_rate=parseFloat(v.zakat_rate)||2.5;v.receipt_width=parseInt(v.receipt_width)||80;
       v.scale_plu_len=parseInt(v.scale_plu_len)||5;v.scale_value_len=parseInt(v.scale_value_len)||5;
@@ -3161,6 +3341,7 @@ function renderShell(){var root=document.getElementById("root");document.body.cl
         onClick:function(){location.hash="#/users";setTimeout(function(){
           var tabs=document.querySelectorAll(".view .tab");if(tabs[2])tabs[2].click();},350);}}),
       langSel,
+      el("button",{class:"icon-btn",title:"Help & shortcuts",text:"❓",onClick:helpModal}),
       el("button",{class:"icon-btn",title:"Toggle theme",text:SESSION.theme==="dark"?"☀️":"🌙",
         onClick:function(e){var next=SESSION.theme==="light"?"dark":"light";applyTheme(next);e.currentTarget.textContent=next==="dark"?"☀️":"🌙";}}),
       el("div",{class:"dropdown"},[el("button",{class:"icon-btn",text:"⋯",title:"Account",
@@ -3182,6 +3363,23 @@ function updateSaveChip(){
   var m=map[st]||map.off;
   chip.className="save-chip "+m.cls;chip.textContent=m.txt;chip.title=m.title;}
 
+/* In-app help — a cashier should never need to find a manual. */
+function helpModal(){
+  function row(k,v){return el("div",{class:"list-row"},[el("span",{text:v}),el("kbd",{text:k})]);}
+  function sec(title,rows){return el("div",{class:"mb"},[el("h4",{class:"mb",text:title})].concat(rows));}
+  modal("❓ Help & shortcuts",el("div",{},[
+    sec("Keyboard",[row("F2","Jump to the product search"),row("F4","Open payment"),
+      row("Enter","Add the scanned item / confirm"),row("Esc","Close a dialog")]),
+    sec("Selling",[
+      el("div",{class:"hint mb",text:"Scan a barcode, or type part of the name — accents, spelling slips and Arabic all work. Scan a carton barcode to sell a whole case. Scale labels add the exact weight."}),
+      el("div",{class:"hint mb",text:"No barcode on the item? Use ＋ Custom Item. Not in the system at all? Scan it and the app offers to add it on the spot."})]),
+    sec("Fixing mistakes",[
+      el("div",{class:"hint mb",text:"Sales History → ↶ undoes a whole sale and puts the stock back. ↩️ refunds part of one. Damaged goods can be written off instead of restocked."})]),
+    sec("Every day",[
+      el("div",{class:"hint mb",text:"Open the register with your float in the morning, close and count it at night, then print the Z-Report for the day's figures."})]),
+    sec("Your data",[
+      el("div",{class:"hint",html:"The chip in the top bar shows where data is saved. Keep it green. Backups live in <strong>Users → Backup &amp; Data</strong>."})])
+  ]),null,{large:true});}
 function changePassword(){var form=buildForm([{name:"current",label:"Current Password",type:"password",full:true},
   {name:"next",label:"New Password",type:"password",full:true}]);
   modal(t("menu.change_password"),form.node,[{label:t("common.cancel"),class:"btn-ghost"},{label:t("common.save"),class:"btn-primary",onClick:function(){var v=form.values();
@@ -3209,7 +3407,16 @@ function boot(){DB.load();
   applyLang(SESSION.user_lang||SESSION.lang);applyTheme(SESSION.theme);
   renderShell();
   window.onhashchange=route;
-  if(!location.hash)location.hash="#/dashboard";route();}
+  if(!location.hash)location.hash="#/dashboard";route();
+  /* First run: walk the owner through making this their own. */
+  if(needsSetup()&&can("*")){
+    setTimeout(function(){setupWizard(function(){renderShell();route();});},260);
+  }else if(usingDefaultAdminPassword()&&can("*")){
+    setTimeout(function(){modal("🔐 Change the default password",
+      el("div",{},[el("div",{class:"banner banner-warn",
+        html:"The <strong>admin</strong> account is still using <strong>admin123</strong>. Anyone who knows it can open your books."}),
+        el("p",{class:"hint",text:"Set a new password from the ⋯ menu → Change Password."})]),
+      [{label:"Later",class:"btn-ghost"},{label:"Change it now",class:"btn-primary",onClick:changePassword}]);},400);}}
 
 /* Reconnect to the data file (if any) before the first render, so the app
    starts from what is on disk rather than the browser mirror. */

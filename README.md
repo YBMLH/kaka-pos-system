@@ -9,6 +9,8 @@ you have a working till — no install, no server, no internet, no accounts. All
 data stays in that browser on that machine.
 
 👉 **[`docs/index.html`](docs/index.html)** — this is the product.
+📄 **[QUICKSTART.md](QUICKSTART.md)** — hand this to the shop; it is written for
+staff, not developers.
 
 ---
 
@@ -28,8 +30,10 @@ admin / admin123        (administrator)
 cashier / cashier123    (cashier — demo)
 ```
 
-Sample products are seeded on first run. Change the admin password from the
-account menu, then make it yours in **Settings**.
+On first run a **setup wizard** walks the owner through their shop name,
+currency and tax, connecting a data file, replacing the default admin password,
+and clearing the example products. It cannot be skipped and never reappears.
+(Re-run it any time from **Settings → Re-run setup wizard**.)
 
 ### Save to a file on the PC (recommended)
 
@@ -106,6 +110,19 @@ loads it back on any machine.
 ## Keyboard
 
 `F2` focus search · `F4` open payment · `Enter` add scanned item · `Esc` close.
+
+In-app help lives behind the **❓** button in the top bar.
+
+## Delivering to a shop
+
+1. Copy `docs/index.html` to the till (a desktop shortcut helps) and print
+   [QUICKSTART.md](QUICKSTART.md).
+2. Sign in as `admin` / `admin123` and complete the setup wizard **with the
+   owner present** — they should choose the password and the data file location.
+3. Load their catalogue: scan items in one by one, or **Products → ⬆ Import CSV**.
+4. Show them the three things that matter daily: scan → **Charge**, the green
+   save chip, and **Close Register → Print Z-Report**.
+5. Agree a weekly routine of copying the data file to a USB stick.
 
 ---
 
