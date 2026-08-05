@@ -19,7 +19,8 @@ Username:  admin
 Password:  admin123
 ```
 
-A short setup guide appears. It asks for your shop name, currency and tax,
+A short setup guide appears. It asks for your shop name and currency, whether
+you charge tax (**No** by default — the shelf price is what the customer pays),
 where to keep your data, and a new admin password. **Take the two minutes** —
 it also lets you clear the example products so you start with an empty shop.
 

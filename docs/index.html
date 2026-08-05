@@ -939,7 +939,10 @@ var DB={
     def(sd,"loyalty_enabled","1");def(sd,"loyalty_earn_per",1);
     def(sd,"loyalty_point_value",0.01);def(sd,"loyalty_min_redeem",100);
     /* Anyone already using the app has effectively finished setup. */
-    def(sd,"autolock_minutes",10);def(sd,"reduce_transparency","0");def(sd,"setup_done","1");
+    def(sd,"autolock_minutes",10);def(sd,"reduce_transparency","0");
+    def(sd,"prices_include_tax","0");def(sd,"setup_done","1");
+    /* Existing installs keep whatever they had; a rate of 0 means no tax. */
+    def(sd,"tax_enabled",(parseFloat(sd.tax_rate)>0?"1":"0"));
     /* An earlier default added up to 12 digits, which is not a valid EAN-13.
        Repair it so scale labels parse. */
     if(String(sd.scale_prefix||"2").length+(parseInt(sd.scale_plu_len)||0)+(parseInt(sd.scale_value_len)||0)+1!==13){
@@ -1002,12 +1005,12 @@ var DB={
       ["Tomatoes (kg)","Tomates (kg)","طماطم","Fruits & Vegetables","Generic",4,7,0,120,25,"kg"]
     ];
     var d={settings:{store_name:"KAKA Market",store_address:"",store_phone:"",currency:"MAD",
-      tax_rate:20,zakat_rate:2.5,language:"en",theme:"light",receipt_width:80,
+      tax_rate:0,zakat_rate:2.5,language:"en",theme:"light",receipt_width:80,
       receipt_footer:"Thank you for your visit!",
       scale_enabled:"1",scale_prefix:"2",scale_plu_len:6,scale_value_len:5,scale_mode:"price",
       scale_price_divisor:100,scale_weight_divisor:1000,
       loyalty_enabled:"1",loyalty_earn_per:1,loyalty_point_value:0.01,loyalty_min_redeem:100,
-      autolock_minutes:10,reduce_transparency:"0",setup_done:""},
+      autolock_minutes:10,reduce_transparency:"0",tax_enabled:"0",prices_include_tax:"1",setup_done:""},
       users:[{id:1,username:"admin",full_name:"System Administrator",password:hashPw("admin123"),role:"administrator",active:1,last_login:null},
              {id:2,username:"cashier",full_name:"Demo Cashier",password:hashPw("cashier123"),role:"cashier",active:1,last_login:null}],
       categories:[],brands:[],suppliers:[
@@ -1025,7 +1028,9 @@ var DB={
       var bc="611100000"+(1000+i*7);
       d.products.push({id:i+1,barcode:bc,sku:"SKU"+(1000+i),name_en:p[0],name_fr:p[1],name_ar:p[2],
         search_blob:searchBlob(p[0],p[1],p[2],bc),category_id:catId[p[3]],brand_id:brId[p[4]],
-        supplier_id:((i%3)+1),purchase_price:p[5],selling_price:p[6],tax_rate:p[7],quantity:p[8],
+        supplier_id:((i%3)+1),purchase_price:p[5],selling_price:p[6],
+        /* Sample shop charges no tax; p[7] is the rate to use if tax is enabled. */
+        tax_rate:0,quantity:p[8],
         min_stock:p[9],unit:p[10],expiry_date:"",batch_number:"",notes:"",
         units_per_box:p[11]||0,pack_name:"Box",box_barcode:p[11]?("2"+bc.slice(1)):"",box_price:p[12]||0,
         archived:0,created_at:now});
@@ -1105,7 +1110,9 @@ function setupWizard(onDone){
   var backBtn=el("button",{class:"btn btn-ghost",text:"← Back"});
   var nextBtn=el("button",{class:"btn btn-primary",text:"Continue →"});
   var dots=el("div",{class:"wiz-dots"});
-  var answers={lang:SESSION.lang,store:"",currency:"MAD",tax:20,clean:true,pw1:"",pw2:""};
+  /* Tax is off unless the owner says otherwise — many markets do not charge
+     it at the till at all. */
+  var answers={lang:SESSION.lang,store:"",currency:"MAD",taxOn:false,tax:0,clean:true,pw1:"",pw2:""};
 
   var m=modal("",el("div",{},[titleEl,dots,body]),[],{large:true,sticky:true});
   /* No escape hatch — setup must be completed. */
@@ -1132,7 +1139,14 @@ function setupWizard(onDone){
           onClick:function(){answers.lang=L[0];applyLang(L[0]);draw();}}));});
       refs.store=el("input",{value:answers.store,placeholder:"e.g. Marché Al Baraka"});
       refs.currency=el("input",{value:answers.currency,placeholder:"MAD"});
+      refs.taxOn=el("select",{},[el("option",{value:"0",text:"No — the price on the shelf is what the customer pays"}),
+        el("option",{value:"1",text:"Yes — add tax at the till"})]);
+      refs.taxOn.value=answers.taxOn?"1":"0";
       refs.tax=el("input",{type:"number",step:"0.01",value:answers.tax});
+      var taxRateField=el("div",{class:"field",style:answers.taxOn?"":"display:none"},
+        [el("label",{text:"Tax %"}),refs.tax]);
+      refs.taxOn.addEventListener("change",function(){
+        taxRateField.style.display=refs.taxOn.value==="1"?"":"none";});
       refs.phone=el("input",{value:"",placeholder:"optional"});
       refs.address=el("input",{value:"",placeholder:"optional"});
       body.appendChild(el("div",{},[
@@ -1141,7 +1155,8 @@ function setupWizard(onDone){
         el("div",{class:"form-grid"},[
           el("div",{class:"field full"},[el("label",{text:"Shop name *"}),refs.store]),
           el("div",{class:"field"},[el("label",{text:"Currency *"}),refs.currency]),
-          el("div",{class:"field"},[el("label",{text:"Default tax %"}),refs.tax]),
+          el("div",{class:"field full"},[el("label",{text:"Does your shop charge tax?"}),refs.taxOn]),
+          taxRateField,
           el("div",{class:"field"},[el("label",{text:"Phone"}),refs.phone]),
           el("div",{class:"field"},[el("label",{text:"Address"}),refs.address])])]));
       setTimeout(function(){refs.store.focus();},60);}
@@ -1199,7 +1214,8 @@ function setupWizard(onDone){
       var v=(refs.store.value||"").trim();
       if(!v){toast("Please enter your shop name","error");refs.store.focus();return false;}
       answers.store=v;answers.currency=(refs.currency.value||"MAD").trim()||"MAD";
-      answers.tax=parseFloat(refs.tax.value)||0;
+      answers.taxOn=refs.taxOn.value==="1";
+      answers.tax=answers.taxOn?(parseFloat(refs.tax.value)||0):0;
       answers.phone=refs.phone.value;answers.address=refs.address.value;
       if(answers.tax<0){toast("Tax cannot be negative","error");return false;}
       return true;}
@@ -1211,7 +1227,8 @@ function setupWizard(onDone){
     return true;}
   function finish(){
     var st=DB.data.settings;
-    st.store_name=answers.store;st.currency=answers.currency;st.tax_rate=answers.tax;
+    st.store_name=answers.store;st.currency=answers.currency;
+    st.tax_enabled=answers.taxOn?"1":"0";st.tax_rate=answers.tax;
     st.store_phone=answers.phone||"";st.store_address=answers.address||"";
     st.language=answers.lang;st.setup_done="1";
     var admin=DB.data.users.filter(function(u){return u.username==="admin";})[0];
@@ -1445,6 +1462,7 @@ function recalcSaleTotals(sale){
     sale.orig_subtotal=sale.subtotal;sale.orig_total=sale.total;
     sale.orig_tax=sale.tax;sale.orig_cost=sale.cost_total;
     sale.orig_profit=sale.profit;sale.orig_discount=sale.discount;}
+  var incl=!!sale.tax_inclusive;
   var fullSub=0,newSub=0,newTax=0,newCost=0;
   (sale.items||[]).forEach(function(it){
     var q=it.quantity||0,ref=it.refunded_qty||0,eff=Math.max(q-ref,0);
@@ -1452,8 +1470,9 @@ function recalcSaleTotals(sale){
     var lineDisc=(it.discount||0);
     fullSub+=it.unit_price*q-lineDisc;
     var gross=it.unit_price*eff-lineDisc*ratio;
+    var r=(it.tax_rate||0)/100;
     newSub+=gross;
-    newTax+=gross*(it.tax_rate||0)/100;
+    newTax+=incl?(gross-gross/(1+r)):(gross*r);
     newCost+=(it.purchase_price||0)*eff;});
   /* Scale the order-level discount to the part of the basket that was kept. */
   var share=fullSub>0?(newSub/fullSub):0;
@@ -1461,9 +1480,9 @@ function recalcSaleTotals(sale){
   sale.subtotal=round2(newSub);
   sale.discount=round2(disc);
   sale.tax=round2(newTax);
-  sale.total=round2(newSub-disc+newTax);
+  sale.total=round2(incl?(newSub-disc):(newSub-disc+newTax));
   sale.cost_total=round2(newCost);
-  sale.profit=round2(newSub-disc-newCost);
+  sale.profit=round2((incl?(newSub-disc-newTax):(newSub-disc))-newCost);
   sale.refunded_total=round2((sale.orig_total||0)-sale.total);
   return sale;}
 /* Voided sales are excluded from every revenue figure by the filter above. */
@@ -1770,10 +1789,24 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
     if(delta>0&&cartPieces(l.product_id)+per>l.stock){toast("Not enough stock","error");return;}
     l.quantity+=delta;if(l.quantity<=0)state.cart.splice(idx,1);else applyTier(l);renderCart();}
   function discountAmount(subtotal){return state.discount_pct?Math.round(subtotal*(state.discount||0)/100*100)/100:(state.discount||0);}
-  function totals(){var subtotal=0,tax=0,cost=0;state.cart.forEach(function(l){var g=l.unit_price*l.quantity-l.discount;
-    subtotal+=g;tax+=g*(l.tax_rate||0)/100;cost+=l.purchase_price*l.quantity;});
-    var disc=Math.min(discountAmount(subtotal),subtotal);
-    return{subtotal:subtotal,tax:tax,cost:cost,disc:disc,total:subtotal-disc+tax,profit:subtotal-disc-cost};}
+  function totals(){
+    var on=taxEnabled(),incl=pricesIncludeTax();
+    var gross=0,cost=0;
+    state.cart.forEach(function(l){
+      gross+=l.unit_price*l.quantity-l.discount;
+      cost+=l.purchase_price*l.quantity;});
+    var disc=Math.min(discountAmount(gross),gross);
+    var tax=0;
+    if(on)state.cart.forEach(function(l){
+      var lineGross=l.unit_price*l.quantity-l.discount;
+      var share=gross>0?(lineGross/gross):0;
+      var afterDisc=lineGross-disc*share;
+      var r=(l.tax_rate||0)/100;
+      tax+=incl?(afterDisc-afterDisc/(1+r)):(afterDisc*r);});
+    var total=(on&&!incl)?(gross-disc+tax):(gross-disc);
+    var netRevenue=(on&&incl)?(gross-disc-tax):(gross-disc);
+    return{subtotal:gross,tax:tax,cost:cost,disc:disc,total:total,
+      profit:netRevenue-cost,incl:incl,taxOn:on};}
   function renderTotals(){var tot=totals();clear(totalsBox);
     totalsBox.appendChild(row(t("pos.subtotal"),money(tot.subtotal)));
     var discField=el("input",{type:"number",value:state.discount,step:"0.01",style:"width:70px;text-align:end"});
@@ -1783,16 +1816,17 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
       onClick:function(){state.discount_pct=!state.discount_pct;renderTotals();}});
     var discCtl=can("discount")?el("div",{class:"flex",style:"gap:4px"},[discField,toggle,el("span",{class:"muted",style:"font-size:12px",text:"−"+money(tot.disc)})]):el("span",{text:money(tot.disc)});
     totalsBox.appendChild(el("div",{class:"cart-total-row"},[el("span",{text:t("pos.discount")}),discCtl]));
-    totalsBox.appendChild(row(t("pos.tax"),money(tot.tax)));
+    if(tot.taxOn)totalsBox.appendChild(row(tot.incl?(t("pos.tax")+" (incl.)"):t("pos.tax"),money(tot.tax)));
     totalsBox.appendChild(el("div",{class:"cart-total-row grand"},[el("span",{text:t("common.total")}),el("span",{text:money(tot.total)})]));
     totalsBox.appendChild(el("div",{class:"cart-actions"},[
       el("button",{class:"btn btn-ghost",text:t("pos.clear"),onClick:function(){if(state.cart.length)confirmModal("Clear the cart?",function(){state.cart=[];state.discount=0;renderCart();});}}),
       el("button",{class:"btn btn-success btn-lg",text:t("pos.pay")+" · "+money(tot.total),onClick:function(){openPayment(tot);}})]));}
   function row(l,r){return el("div",{class:"cart-total-row"},[el("span",{text:l}),el("span",{text:r})]);}
   /* ---- Custom / open-price item ---- */
-  function customItemModal(){var f=buildForm([{name:"name",label:"Item name",full:true},
-    {name:"price",label:t("prod.price"),type:"number",step:"0.01"},{name:"quantity",label:"Quantity",type:"number",step:"any",default:1},
-    {name:"tax_rate",label:"Tax %",type:"number",step:"0.01",default:DB.data.settings.tax_rate}]);
+  function customItemModal(){var fields=[{name:"name",label:"Item name",full:true},
+    {name:"price",label:priceLabel(t("prod.price")),type:"number",step:"0.01"},{name:"quantity",label:"Quantity",type:"number",step:"any",default:1}];
+    if(taxEnabled())fields.push({name:"tax_rate",label:"Tax %",type:"number",step:"0.01",default:DB.data.settings.tax_rate});
+    var f=buildForm(fields);
     modal(t("pos.custom_item"),f.node,[{label:t("common.cancel"),class:"btn-ghost"},{label:t("common.add"),class:"btn-primary",onClick:function(){
       var v=f.values();if(!(""+v.name).trim()||!(v.price>0)){toast("Name and a positive price are required","error");return false;}
       state.cart.push({product_id:null,name:(""+v.name).trim(),unit_price:v.price,purchase_price:0,
@@ -1918,11 +1952,15 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
       var p=DB.data.products.filter(function(x){return x.id===l.product_id;})[0];
       if(!p||cartPieces(l.product_id)>p.quantity){toast("Insufficient stock: "+l.name,"error");charging=false;return false;}}
     DB.data.counters.sale++;var rc="R"+today().replace(/-/g,"")+"-"+("0000"+DB.data.counters.sale).slice(-4);
+    /* With tax off, or with tax already inside the shelf price, the line total
+       is simply what was rung up. */
+    var incl=pricesIncludeTax()||!taxEnabled();
     var items=state.cart.map(function(l){var g=l.unit_price*l.quantity-l.discount;
       return{product_id:l.product_id,name:l.name,quantity:l.quantity,unit_price:l.unit_price,
-        purchase_price:l.purchase_price,discount:l.discount,tax_rate:l.tax_rate,
+        purchase_price:l.purchase_price,discount:l.discount,tax_rate:taxEnabled()?l.tax_rate:0,
         pack_units:l.pack_units||1,pack_label:l.pack_label||"",
-        line_total:Math.round((g+g*l.tax_rate/100)*100)/100,refunded_qty:0};});
+        /* what the customer pays for this line */
+        line_total:round2(incl?g:(g+g*(l.tax_rate||0)/100)),refunded_qty:0};});
     var openReg=DB.data.registers.filter(function(x){return x.status==="open"&&x.user===SESSION.user.username;})[0];
     var sale={id:DB.nextId("sales"),receipt_no:rc,user:SESSION.user.username,customer_id:state.customer_id,
       register_id:openReg?openReg.id:null,
@@ -1930,7 +1968,8 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
       total:round2(tot.total-redeemAmt),cost_total:round2(tot.cost),profit:round2(tot.profit-redeemAmt),
       points_redeemed:redeemPts,points_value:round2(redeemAmt),
       paid:round2(paid),change_due:round2(Math.max(paid-(tot.total-redeemAmt),0)),payment_method:method,
-      payment_detail:detail||{},status:"completed",items:items,created_at:new Date().toISOString()};
+      payment_detail:detail||{},tax_inclusive:incl,
+      status:"completed",items:items,created_at:new Date().toISOString()};
     DB.data.sales.unshift(sale);
     state.cart.forEach(function(l){if(l.product_id==null)return;
       var pieces=l.quantity*(l.pack_units||1);
@@ -1976,7 +2015,7 @@ function printReceipt(sale){var st=DB.data.settings;var w=window.open("","_blank
     "<table>"+rows+"</table><div class='sep'></div><table>"+
     "<tr><td>Subtotal</td><td style='text-align:right'>"+sale.subtotal.toFixed(2)+"</td></tr>"+
     (sale.discount?"<tr><td>Discount</td><td style='text-align:right'>-"+sale.discount.toFixed(2)+"</td></tr>":"")+
-    "<tr><td>Tax</td><td style='text-align:right'>"+sale.tax.toFixed(2)+"</td></tr>"+
+    (sale.tax?"<tr><td>"+(sale.tax_inclusive?"Incl. VAT":"Tax")+"</td><td style='text-align:right'>"+sale.tax.toFixed(2)+"</td></tr>":"")+
     "<tr class='tot'><td>TOTAL</td><td style='text-align:right'>"+sale.total.toFixed(2)+" "+st.currency+"</td></tr>"+
     "<tr><td>Paid</td><td style='text-align:right'>"+sale.paid.toFixed(2)+"</td></tr>"+
     "<tr><td>Change</td><td style='text-align:right'>"+sale.change_due.toFixed(2)+"</td></tr>"+
@@ -2273,6 +2312,15 @@ function writeOffModal(product,onDone){
 var UNITS=["pcs","box","pack","kg","g","L","ml","m"];
 function isBarcodeLike(s){return /^[0-9]{6,14}$/.test((s||"").trim());}
 
+/* Tax is entirely optional — many markets (Algeria, for one) do not charge it
+   at the till at all. When it is off, no tax is ever calculated, shown or
+   printed, and the whole tax UI disappears. */
+function taxEnabled(){return String(DB.data.settings.tax_enabled||"0")==="1";}
+/* Shelf prices include tax (retail) or tax is added at the till (wholesale). */
+function pricesIncludeTax(){return String(DB.data.settings.prices_include_tax||"0")==="1";}
+/* Label for a price field, only mentioning tax when tax is actually in use. */
+function priceLabel(base){return taxEnabled()?(base+(pricesIncludeTax()?" (incl. tax)":" (excl. tax)")):base;}
+
 /* ---- Loyalty ----------------------------------------------------------
    Customers earn points per unit of currency spent and can spend them back as
    a discount. Point value and the minimum redemption are configurable. */
@@ -2434,9 +2482,9 @@ function quickAddProduct(prefill,opts){
       el("div",{class:"field full"},[el("label",{text:t("quick.name")+" *"}),nameInp]),
       el("div",{class:"field full"},[el("label",{text:t("prod.barcode")}),barcodeInp]),
       el("div",{class:"field"},[el("label",{text:t("prod.cost")}),costInp]),
-      el("div",{class:"field"},[el("label",{text:t("prod.price")+" *"}),priceInp]),
+      el("div",{class:"field"},[el("label",{text:priceLabel(t("prod.price"))+" *"}),priceInp]),
       el("div",{class:"field"},[el("label",{text:"Unit"}),unitSel]),
-      el("div",{class:"field"},[el("label",{text:"Tax %"}),taxInp]),
+      taxEnabled()?el("div",{class:"field"},[el("label",{text:"Tax %"}),taxInp]):null,
       el("div",{class:"field"},[el("label",{text:t("prod.category")}),catSel]),
       el("div",{class:"field"},[el("label",{text:"New category"}),newCatInp]),
       el("div",{class:"field full"},[el("label",{text:t("quick.qty_received")}),modeRow]),
@@ -2577,7 +2625,7 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
     {name:"category_id",label:t("prod.category"),type:"select",options:[{value:"",label:"—"}].concat(DB.data.categories.map(function(c){return{value:c.id,label:c.name};}))},
     {name:"brand_id",label:"Brand",type:"select",options:[{value:"",label:"—"}].concat(DB.data.brands.map(function(b){return{value:b.id,label:b.name};}))},
     {name:"supplier_id",label:"Supplier",type:"select",options:[{value:"",label:"—"}].concat(DB.data.suppliers.map(function(s){return{value:s.id,label:s.company_name};}))},
-    {name:"purchase_price",label:t("prod.cost"),type:"number",step:"0.01"},{name:"selling_price",label:t("prod.price"),type:"number",step:"0.01"},
+    {name:"purchase_price",label:t("prod.cost"),type:"number",step:"0.01"},{name:"selling_price",label:priceLabel(t("prod.price")),type:"number",step:"0.01"},
     {name:"tax_rate",label:"Tax %",type:"number",step:"0.01"},{name:"quantity",label:"Quantity (pieces)",type:"number",step:"any"},
     {name:"min_stock",label:"Min Stock",type:"number",step:"any"},{name:"unit",label:"Unit",default:"pcs"},
     {name:"pack_name",label:"Case name (Box / Carton…)",default:"Box"},
@@ -2586,7 +2634,9 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
     {name:"box_price",label:"Case price (0 = pieces × price)",type:"number",step:"0.01"},
     {name:"plu",label:"Scale PLU (weighed items)"},
     {name:"expiry_date",label:"Expiry Date (simple)",type:"date"},{name:"batch_number",label:"Batch Number"},
-    {name:"notes",label:"Notes",type:"textarea",full:true}],r||{});
+    {name:"notes",label:"Notes",type:"textarea",full:true}].filter(function(f){
+      /* No tax in this shop → no tax field to confuse anyone. */
+      return f.name!=="tax_rate"||taxEnabled();}),r||{});
     var picker=imagePicker(r||{});
     var tiers=tierEditor(r||{});
     /* Tabbed body keeps the form readable now that it covers a lot of ground. */
@@ -2605,6 +2655,7 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
         if(!(v.name_en||v.name_ar||v.name_fr)){toast("A product name is required","error");return false;}
         if(v.selling_price<0||v.purchase_price<0){toast("Prices cannot be negative","error");return false;}
         if(v.tax_rate<0){toast("Tax cannot be negative","error");return false;}
+        if(v.tax_rate===undefined&&!r)v.tax_rate=0;
         ["category_id","brand_id","supplier_id"].forEach(function(k){v[k]=v[k]?parseInt(v[k]):null;});
         /* A code must be unique across piece AND case barcodes. */
         function codeTaken(code){if(!code)return null;
@@ -3207,7 +3258,7 @@ VIEWS.register={title:function(){return t("nav.register");},render:function(root
       el("button",{class:"btn btn-primary",text:"🖨 Print Z-Report",onClick:function(){printZReport(zReportData(today()));}})]),
     el("div",{class:"grid stats-grid mb"},[
       statCard("Transactions",num(z.count),z.voided?(z.voided+" voided"):"","blue","🧾"),
-      statCard("Gross sales",money(z.gross),"Tax "+money(z.tax),"green","💵"),
+      statCard("Gross sales",money(z.gross),z.tax?("Tax "+money(z.tax)):"","green","💵"),
       statCard("Cash expected",money(z.cashSales),"cash + mixed","orange","💰"),
       statCard("Net profit",money(z.net),"after expenses & losses","green","📈")]),
     table([{key:"k",label:"Line"},{key:"v",label:"Amount",num:true}],
@@ -3271,7 +3322,7 @@ function printZReport(z){
     "<h2>SALES</h2><table>"+
     row("Transactions",String(z.count))+row("Items sold",num(z.items,2))+
     row("Gross sales",money(z.gross))+row("Discounts",money(z.discount))+
-    row("Tax collected",money(z.tax))+row("Refunds",money(z.refunded))+
+    (z.tax?row("Tax collected",money(z.tax)):"")+row("Refunds",money(z.refunded))+
     row("Voided sales",String(z.voided))+
     "</table><h2>PAYMENTS</h2><table>"+methods+row("Cash expected in drawer",money(z.cashSales),true)+"</table>"+
     (regRows?("<h2>REGISTERS</h2><table>"+regRows+"</table>"):"")+
@@ -3346,7 +3397,8 @@ VIEWS.reports={title:function(){return t("nav.reports");},render:function(root){
     body.appendChild(table([{key:"period",label:"Period"},{key:"orders",label:"Orders",num:true},
       {key:"revenue",label:"Revenue",num:true,render:function(r){return money(r.revenue);}},
       {key:"profit",label:"Profit",num:true,render:function(r){return money(r.profit);}},
-      {key:"tax",label:"Tax",num:true,render:function(r){return money(r.tax);}}],rows,{empty:"No data"}));
+      {key:"tax",label:"Tax",num:true,render:function(r){return money(r.tax);}}]
+      .filter(function(c){return c.key!=="tax"||taxEnabled();}),rows,{empty:"No data"}));
     setExport(["Period","Orders","Revenue","Profit","Tax"],rows.map(function(r){return[r.period,r.orders,r.revenue,r.profit,r.tax];}));}
   function invR(){var kindSel=el("select",{style:"width:auto"},[["stock","All Stock"],["low","Low"],["out","Out"],["expiry","Expiry"]].map(function(k){return el("option",{value:k[0]},k[1]);}));
     kindSel.addEventListener("change",function(){clear(tableHolder);tableHolder.appendChild(build(kindSel.value));});
@@ -3693,7 +3745,10 @@ VIEWS.users={title:function(){return t("nav.users");},render:function(root){
 VIEWS.settings={title:function(){return t("nav.settings");},render:function(root){
   clear(root);var s=DB.data.settings;var form=buildForm([{name:"store_name",label:"Store Name"},{name:"store_phone",label:"Phone"},
     {name:"store_address",label:"Address",full:true},{name:"currency",label:"Currency"},
-    {name:"tax_rate",label:"Default Tax %",type:"number",step:"0.01"},{name:"zakat_rate",label:"Zakat Rate %",type:"number",step:"0.01"},
+    {name:"tax_enabled",label:"Sales tax / VAT",type:"select",
+      options:[{value:"0",label:"No tax — prices are final (Algeria, most small shops)"},
+               {value:"1",label:"Charge tax"}]},
+    {name:"zakat_rate",label:"Zakat Rate %",type:"number",step:"0.01"},
     {name:"receipt_width",label:"Receipt Width (mm)",type:"select",options:[{value:"58",label:"58 mm"},{value:"80",label:"80 mm"}]},
     {name:"receipt_footer",label:"Receipt Footer",full:true},
     {name:"scale_enabled",label:"Scale barcodes",type:"select",options:[{value:"1",label:"Enabled"},{value:"0",label:"Disabled"}]},
@@ -3709,14 +3764,20 @@ VIEWS.settings={title:function(){return t("nav.settings");},render:function(root
     {name:"loyalty_min_redeem",label:"Minimum points to redeem",type:"number",step:"1"},
     {name:"autolock_minutes",label:"Lock screen after (minutes, 0 = never)",type:"number",step:"1"},
     {name:"reduce_transparency",label:"Reduce transparency (clearer / faster)",type:"select",
-      options:[{value:"0",label:"Off — frosted glass"},{value:"1",label:"On — solid surfaces"}]}],s);
+      options:[{value:"0",label:"Off — frosted glass"},{value:"1",label:"On — solid surfaces"}]},
+    {name:"tax_rate",label:"Default Tax %",type:"number",step:"0.01"},
+    {name:"prices_include_tax",label:"Shelf prices",type:"select",full:true,
+      options:[{value:"1",label:"Include tax — customer pays the price shown (retail)"},
+               {value:"0",label:"Exclude tax — tax added at the till (wholesale)"}]}]
+    /* The rate and the include/exclude choice are meaningless with tax off. */
+    .filter(function(f){return(f.name!=="tax_rate"&&f.name!=="prices_include_tax")||taxEnabled();}),s);
   root.appendChild(el("div",{class:"card",style:"max-width:760px"},[el("h3",{class:"mb",text:"Store Settings"}),form.node,
     el("div",{class:"flex mt",style:"flex-wrap:wrap"},[
       el("button",{class:"btn btn-ghost btn-sm",text:"🧭 Re-run setup wizard",onClick:function(){
         setupWizard(function(){render();});}}),
       el("button",{class:"btn btn-ghost btn-sm",text:"❓ Help & shortcuts",onClick:helpModal})]),
     el("button",{class:"btn btn-primary mt",text:t("common.save"),onClick:function(){var v=form.values();
-      v.tax_rate=parseFloat(v.tax_rate)||0;v.zakat_rate=parseFloat(v.zakat_rate)||2.5;v.receipt_width=parseInt(v.receipt_width)||80;
+      if(v.tax_rate!==undefined)v.tax_rate=parseFloat(v.tax_rate)||0;v.zakat_rate=parseFloat(v.zakat_rate)||2.5;v.receipt_width=parseInt(v.receipt_width)||80;
       v.scale_plu_len=parseInt(v.scale_plu_len)||5;v.scale_value_len=parseInt(v.scale_value_len)||5;
       v.scale_price_divisor=parseFloat(v.scale_price_divisor)||100;v.scale_weight_divisor=parseFloat(v.scale_weight_divisor)||1000;
       v.loyalty_earn_per=parseFloat(v.loyalty_earn_per)||1;v.loyalty_point_value=parseFloat(v.loyalty_point_value)||0.01;

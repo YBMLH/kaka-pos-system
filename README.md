@@ -31,7 +31,8 @@ cashier / cashier123    (cashier — demo)
 ```
 
 On first run a **setup wizard** walks the owner through their shop name,
-currency and tax, connecting a data file, replacing the default admin password,
+currency and whether they charge tax, connecting a data file, replacing the
+default admin password,
 and clearing the example products. It cannot be skipped and never reappears.
 (Re-run it any time from **Settings → Re-run setup wizard**.)
 
@@ -88,6 +89,11 @@ loads it back on any machine.
 - **Mistakes are recoverable.** Void a sale to restore stock and reverse credit,
   loyalty and revenue — the record stays for audit. Damaged goods can be written
   off at cost instead of restocked.
+- **Tax is optional.** New shops start with **no tax** — the price on the shelf
+  is exactly what the customer pays, and no tax line appears on screen, on the
+  receipt or in the reports. Shops that do charge it turn it on in
+  **Settings → Sales tax / VAT** and choose whether shelf prices already
+  include the tax (retail) or it is added at the till (wholesale).
 - **Losses hit the P&L.** Damage, expiry, theft, breakage and stocktake
   shortages are valued at cost and subtracted from net profit.
 - **Languages.** English, French and Arabic with full RTL, plus light/dark
