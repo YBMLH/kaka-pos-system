@@ -96,6 +96,10 @@ label{font-size:12.5px;color:var(--text-muted);font-weight:550}
   align-items:center;justify-content:center;transition:.15s;flex-shrink:0}
 .icon-btn:hover{background:var(--surface-3);border-color:var(--border-strong)}
 .mini-select{padding:8px 30px 8px 11px;width:auto;font-size:13px;font-weight:600}
+.lock-screen{position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;
+  padding:20px;background:radial-gradient(1000px 500px at 20% 10%,#4f46e5 0%,transparent 55%),
+  radial-gradient(800px 450px at 80% 90%,#0ea5e9 0%,transparent 50%),rgba(8,12,22,.97);
+  backdrop-filter:blur(4px)}
 .wiz-dots{display:flex;gap:7px;margin:12px 0 18px}
 .wiz-dot{width:34px;height:5px;border-radius:99px;background:var(--border)}
 .wiz-dot.active{background:var(--primary)}
@@ -338,7 +342,8 @@ td.num,th.num{text-align:end;font-variant-numeric:tabular-nums}
 .modal-close:hover{background:var(--surface-3);color:var(--text)}
 
 /* ---- Toast ---- */
-.toast-root{position:fixed;bottom:22px;inset-inline-end:22px;display:flex;flex-direction:column;gap:10px;z-index:300}
+.toast-root{position:fixed;bottom:22px;inset-inline-end:22px;display:flex;flex-direction:column;gap:10px;
+  z-index:300;pointer-events:none}   /* must never block the Charge button */
 .toast{background:var(--surface);border:1px solid var(--border);border-inline-start:4px solid var(--primary);
   border-radius:var(--radius-sm);padding:13px 18px;box-shadow:var(--shadow-lg);min-width:250px;
   max-width:360px;font-size:13.5px;font-weight:550;animation:slidein .22s cubic-bezier(.3,1.2,.5,1);transition:opacity .3s}
@@ -425,6 +430,93 @@ function levenshtein(a,b){if(a===b)return 0;if(!a)return b.length;if(!b)return a
 
 /* ---------- Local data store (localStorage-backed) ---------------------- */
 var STORE_KEY="kaka_pos_data_v1";
+var CART_KEY="kaka_active_cart";     /* survives a crash mid-sale */
+
+/* ---------- Crash safety -----------------------------------------------
+   A till loses power, a browser is closed by mistake, a tab crashes. The
+   basket is kept outside the page so the sale can be picked up again. */
+function saveActiveCart(state){
+  try{
+    if(!state||!state.cart||!state.cart.length){localStorage.removeItem(CART_KEY);return;}
+    localStorage.setItem(CART_KEY,JSON.stringify({
+      cart:state.cart,discount:state.discount,discount_pct:state.discount_pct,
+      customer_id:state.customer_id,user:SESSION.user?SESSION.user.username:"",
+      at:new Date().toISOString()}));
+  }catch(e){/* a full cache must never block selling */}}
+function loadActiveCart(){
+  try{var raw=localStorage.getItem(CART_KEY);if(!raw)return null;
+    var d=JSON.parse(raw);
+    if(!d||!d.cart||!d.cart.length)return null;
+    /* Ignore a basket left by a different cashier or from long ago. */
+    if(d.user&&SESSION.user&&d.user!==SESSION.user.username)return null;
+    if(d.at&&(Date.now()-new Date(d.at).getTime())>12*3600*1000)return null;
+    return d;}catch(e){return null;}}
+function clearActiveCart(){try{localStorage.removeItem(CART_KEY);}catch(e){}}
+
+/* ---------- Rolling snapshots ------------------------------------------
+   A daily copy of the whole dataset is kept in IndexedDB (far roomier than
+   localStorage) so a bad import, a mistaken wipe or a corrupted file can be
+   rolled back without hunting for a manual backup. */
+var SNAP_KEEP=7;
+function snapshotList(){return idbGet("snapshots").then(function(v){return v||[];}).catch(function(){return[];});}
+function takeSnapshot(reason){
+  var today_=today();
+  return snapshotList().then(function(list){
+    /* One automatic snapshot per day; manual ones always store. */
+    if(reason==="daily"&&list.some(function(s){return s.day===today_;}))return false;
+    var payload;
+    try{payload=JSON.stringify(DB.data);}catch(e){return false;}
+    list.unshift({id:"s"+Date.now(),day:today_,reason:reason||"daily",
+      at:new Date().toISOString(),size:payload.length,data:payload});
+    while(list.length>SNAP_KEEP)list.pop();
+    return idbSet("snapshots",list).then(function(){return true;}).catch(function(){return false;});
+  });}
+function restoreSnapshot(id){
+  return snapshotList().then(function(list){
+    var s=list.filter(function(x){return x.id===id;})[0];
+    if(!s)return false;
+    var parsed=JSON.parse(s.data);
+    if(!parsed||!parsed.products||!parsed.settings)return false;
+    DB.data=parsed;DB.migrate();DB.save();return true;});}
+
+/* ---------- Data health check ------------------------------------------
+   Verifies the numbers agree with each other and offers to repair. */
+function healthCheck(){
+  var issues=[];
+  var d=DB.data;
+  d.products.forEach(function(p){
+    var sum=0;
+    d.movements.forEach(function(m){if(m.product_id===p.id)sum+=(m.change_qty||0);});
+    if(Math.abs(sum-(p.quantity||0))>0.01)
+      issues.push({type:"ledger",id:p.id,name:p.name_en||p.name_ar,
+        detail:"stock "+num(p.quantity,2)+" but movements total "+num(sum,2),
+        fix:function(){adjustStock(p.id,(p.quantity||0)-sum===0?0:0,"adjustment","");
+          /* Trust the on-hand figure and add a balancing entry. */
+          var diff=(p.quantity||0)-sum;
+          if(diff!==0){d.movements.unshift({id:DB.nextId("movements"),product_id:p.id,
+            product_name:p.name_en,change_qty:diff,balance:p.quantity,reason:"adjustment",
+            note:"Ledger correction",loss_value:0,user:"system",created_at:new Date().toISOString()});}}});
+    var bt=totalBatchQty(p);
+    if(bt>0&&Math.abs(bt-(p.quantity||0))>0.01)
+      issues.push({type:"batches",id:p.id,name:p.name_en||p.name_ar,
+        detail:"batches hold "+num(bt,2)+" but stock is "+num(p.quantity,2),
+        fix:function(){p.quantity=Math.round(bt*1000)/1000;}});
+    if(p.quantity<0)
+      issues.push({type:"negative",id:p.id,name:p.name_en||p.name_ar,
+        detail:"negative stock ("+num(p.quantity,2)+")",
+        fix:function(){p.quantity=0;}});
+    if(p.selling_price<0||p.purchase_price<0)
+      issues.push({type:"price",id:p.id,name:p.name_en||p.name_ar,detail:"negative price",
+        fix:function(){p.selling_price=Math.max(0,p.selling_price);p.purchase_price=Math.max(0,p.purchase_price);}});
+  });
+  /* Duplicate barcodes make scanning ambiguous. */
+  var seen={};
+  d.products.forEach(function(p){
+    [p.barcode,p.box_barcode].forEach(function(c){if(!c)return;
+      if(seen[c])issues.push({type:"dupbarcode",id:p.id,name:p.name_en||p.name_ar,
+        detail:"barcode "+c+" is also on "+seen[c],fix:null});
+      else seen[c]=p.name_en||p.name_ar;});});
+  return issues;}
 var ROLE_PERMS={
   administrator:["*"],
   manager:["dashboard","pos","products.view","products.edit","inventory","suppliers","customers",
@@ -561,7 +653,7 @@ var DB={
     def(sd,"loyalty_enabled","1");def(sd,"loyalty_earn_per",1);
     def(sd,"loyalty_point_value",0.01);def(sd,"loyalty_min_redeem",100);
     /* Anyone already using the app has effectively finished setup. */
-    def(sd,"setup_done","1");
+    def(sd,"autolock_minutes",10);def(sd,"setup_done","1");
     /* An earlier default added up to 12 digits, which is not a valid EAN-13.
        Repair it so scale labels parse. */
     if(String(sd.scale_prefix||"2").length+(parseInt(sd.scale_plu_len)||0)+(parseInt(sd.scale_value_len)||0)+1!==13){
@@ -629,7 +721,7 @@ var DB={
       scale_enabled:"1",scale_prefix:"2",scale_plu_len:6,scale_value_len:5,scale_mode:"price",
       scale_price_divisor:100,scale_weight_divisor:1000,
       loyalty_enabled:"1",loyalty_earn_per:1,loyalty_point_value:0.01,loyalty_min_redeem:100,
-      setup_done:""},
+      autolock_minutes:10,setup_done:""},
       users:[{id:1,username:"admin",full_name:"System Administrator",password:hashPw("admin123"),role:"administrator",active:1,last_login:null},
              {id:2,username:"cashier",full_name:"Demo Cashier",password:hashPw("cashier123"),role:"cashier",active:1,last_login:null}],
       categories:[],brands:[],suppliers:[
@@ -1207,7 +1299,31 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
         el("button",{class:"btn btn-sm btn-ghost",text:t("pos.hold"),onClick:holdSale})])]),
     cartItems,el("div",{class:"cart-foot"},[totalsBox])]);
   root.appendChild(el("div",{class:"pos-layout"},[left,cart]));
+  /* Read any interrupted basket BEFORE the first render, because rendering an
+     empty cart clears the saved copy. */
+  var pendingRestore=loadActiveCart();
   updateHeldLabel();loadTiles();renderCart();searchInput.focus();
+  /* Pick up a sale interrupted by a crash, power cut or closed tab. */
+  (function(){
+    var saved=pendingRestore;
+    if(!saved)return;
+    var count=saved.cart.reduce(function(n,l){return n+l.quantity;},0);
+    modal("↻ Unfinished sale found",el("div",{},[
+      el("p",{class:"mb",text:"A sale was in progress when the app last closed."}),
+      el("div",{class:"banner",text:num(count,2)+" item(s) · "+
+        saved.cart.map(function(l){return l.name;}).slice(0,4).join(", ")+
+        (saved.cart.length>4?"…":"")}),
+      el("p",{class:"hint",text:"Restore it, or discard it and start fresh."})]),
+      [{label:"Discard",class:"btn-ghost",onClick:function(){clearActiveCart();}},
+       {label:"Restore sale",class:"btn-primary",onClick:function(){
+         state.cart=saved.cart.map(function(l){
+           if(l.product_id!=null){var p=DB.data.products.filter(function(x){return x.id===l.product_id;})[0];
+             l.stock=p?p.quantity:0;}else l.stock=Infinity;return l;});
+         state.discount=saved.discount||0;state.discount_pct=!!saved.discount_pct;
+         state.customer_id=saved.customer_id||null;
+         var c=state.customer_id?DB.data.customers.filter(function(x){return x.id===state.customer_id;})[0]:null;
+         custLabel.textContent=c?c.name:t("pos.walk_in");
+         renderCart();toast("Sale restored","success");}}]);})();
   // Keyboard: F2 focuses search, F4 opens payment — only while POS is on screen.
   if(window._posKey)document.removeEventListener("keydown",window._posKey);
   window._posKey=function(e){if(document.getElementById("pos-search")!==searchInput)return;
@@ -1341,6 +1457,7 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
     line.unit_price=eff;
     line.tier_applied=(eff<p.selling_price)?eff:null;}
   function renderCart(){clear(cartItems);
+    saveActiveCart(state);          /* crash-safe: keep the basket on disk */
     if(!state.cart.length)cartItems.appendChild(el("div",{class:"cart-empty"},[
       el("span",{class:"ce-icon",text:"🛒"}),el("div",{text:t("pos.empty_cart")}),
       el("div",{style:"margin-top:6px",html:t("pos.empty_hint").replace("F2","<kbd>F2</kbd>")})]));
@@ -1504,12 +1621,16 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
       else if(mth==="mixed"){var c=parseFloat(ref.cash.value)||0,cd=parseFloat(ref.card.value)||0;paid=c+cd;detail={cash:c,card:cd};if(paid<due){toast("Split amounts are less than the total","error");return false;}}
       else{if(!state.customer_id){toast("Select a customer for a credit sale","error");return false;}paid=parseFloat(ref.paid.value)||0;}
       return checkout(tot,mth,paid,detail,redeemPts);}}]);}
+  var charging=false;   /* stops a double tap creating two sales */
   function checkout(tot,method,paid,detail,redeemPts){
+    if(charging){return false;}
+    charging=true;
+    setTimeout(function(){charging=false;},1200);
     redeemPts=Math.max(0,parseInt(redeemPts)||0);
     var redeemAmt=Math.min(pointsToMoney(redeemPts),tot.total);
     for(var i=0;i<state.cart.length;i++){var l=state.cart[i];if(l.product_id==null)continue;
       var p=DB.data.products.filter(function(x){return x.id===l.product_id;})[0];
-      if(!p||cartPieces(l.product_id)>p.quantity){toast("Insufficient stock: "+l.name,"error");return false;}}
+      if(!p||cartPieces(l.product_id)>p.quantity){toast("Insufficient stock: "+l.name,"error");charging=false;return false;}}
     DB.data.counters.sale++;var rc="R"+today().replace(/-/g,"")+"-"+("0000"+DB.data.counters.sale).slice(-4);
     var items=state.cart.map(function(l){var g=l.unit_price*l.quantity-l.discount;
       return{product_id:l.product_id,name:l.name,quantity:l.quantity,unit_price:l.unit_price,
@@ -1541,7 +1662,9 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
         cust.loyalty_pts+=pointsEarned(sale.total);}}
     DB.save();log("sale","sale",rc+" total="+sale.total);
     toast("Sale "+rc+" completed","success");
-    state.cart=[];state.discount=0;state.customer_id=null;custLabel.textContent=t("pos.walk_in");renderCart();loadTiles();searchInput.focus();
+    state.cart=[];state.discount=0;state.customer_id=null;custLabel.textContent=t("pos.walk_in");
+    clearActiveCart();renderCart();loadTiles();searchInput.focus();
+    charging=false;
     showComplete(sale);}
   function showComplete(sale){var body=el("div",{style:"text-align:center"},[
     el("div",{class:"stat-value up",text:money(sale.total)}),
@@ -3221,6 +3344,61 @@ VIEWS.users={title:function(){return t("nav.users");},render:function(root){
       el("div",{style:"height:8px;border-radius:99px;background:var(--surface-3);margin-top:8px;overflow:hidden"},
         el("div",{style:"height:100%;width:"+pct+"%;background:var("+(pct>85?"--danger":(pct>60?"--warning":"--success"))+")"})),
       pct>85?el("div",{class:"banner banner-warn mt",text:"Storage is nearly full. Export a backup, then remove product photos or delete old sales."}):null]));
+    /* ---- Restore points ---- */
+    var snapCard=el("div",{class:"card mt"});
+    function drawSnaps(){
+      clear(snapCard);
+      snapCard.appendChild(el("div",{class:"section-head"},[
+        el("h3",{text:"🕘 Restore points"}),
+        el("button",{class:"btn btn-ghost btn-sm",text:"📸 Take one now",onClick:function(){
+          takeSnapshot("manual").then(function(){toast("Restore point saved","success");drawSnaps();});}})]));
+      snapCard.appendChild(el("div",{class:"hint mb",
+        text:"The app keeps an automatic copy of everything once a day (last "+SNAP_KEEP+" kept). Use one to undo a bad import or an accidental wipe."}));
+      var holder=el("div",{});snapCard.appendChild(holder);
+      snapshotList().then(function(list){
+        clear(holder);
+        holder.appendChild(table([
+          {key:"at",label:"Taken",render:function(x){return fmtDate(x.at);}},
+          {key:"reason",label:"Type",render:function(x){return badge(x.reason,x.reason==="manual"?"blue":"gray");}},
+          {key:"size",label:"Size",num:true,render:function(x){return (x.size/1024).toFixed(0)+" KB";}},
+          {key:"act",label:"",num:true,render:function(x){return el("button",{class:"btn btn-sm btn-ghost",text:"Restore",
+            onClick:function(){confirmModal("Restore everything as it was on "+fmtDate(x.at)+"? Anything done since will be lost.",function(){
+              takeSnapshot("manual").then(function(){return restoreSnapshot(x.id);}).then(function(ok){
+                if(ok){toast("Restored","success");render();}else toast("Could not restore that point","error");});});}});}}
+        ],list,{empty:"No restore points yet"}));});}
+    drawSnaps();body.appendChild(snapCard);
+
+    /* ---- Health check ---- */
+    var healthCard=el("div",{class:"card mt"});
+    function drawHealth(){
+      clear(healthCard);
+      healthCard.appendChild(el("div",{class:"section-head"},[
+        el("h3",{text:"🩺 Data health"}),
+        el("button",{class:"btn btn-ghost btn-sm",text:"Run check",onClick:drawHealthResults})]));
+      healthCard.appendChild(el("div",{class:"hint",text:"Checks that stock levels, the movement ledger, batches and barcodes all agree."}));}
+    function drawHealthResults(){
+      var issues=healthCheck();
+      clear(healthCard);
+      healthCard.appendChild(el("div",{class:"section-head"},[el("h3",{text:"🩺 Data health"}),
+        el("span",{class:"badge badge-"+(issues.length?"orange":"green"),
+          text:issues.length?(issues.length+" to look at"):"all good"})]));
+      if(!issues.length){healthCard.appendChild(el("div",{class:"banner",text:"✅ Everything agrees — stock, ledger, batches and barcodes."}));return;}
+      healthCard.appendChild(table([
+        {key:"name",label:"Product"},
+        {key:"detail",label:"Issue"},
+        {key:"type",label:"Type",render:function(x){return badge(x.type,"orange");}}],issues));
+      var fixable=issues.filter(function(i){return !!i.fix;});
+      healthCard.appendChild(el("div",{class:"flex mt"},[
+        fixable.length?el("button",{class:"btn btn-primary",text:"Repair "+fixable.length+" automatically",
+          onClick:function(){confirmModal("Repair "+fixable.length+" item(s)? A restore point is saved first.",function(){
+            takeSnapshot("manual").then(function(){
+              fixable.forEach(function(i){try{i.fix();}catch(e){}});
+              DB.save();toast("Repaired "+fixable.length+" item(s)","success");drawHealthResults();});});}}):null,
+        el("button",{class:"btn btn-ghost",text:"Re-check",onClick:drawHealthResults})]));
+      if(issues.some(function(i){return !i.fix;}))
+        healthCard.appendChild(el("div",{class:"hint mt",text:"Duplicate barcodes must be fixed by hand in Products — two items cannot share one code."}));}
+    drawHealth();body.appendChild(healthCard);
+
     body.appendChild(el("div",{class:"card mt"},[el("h3",{class:"mb",text:"Data Summary"}),
       table([{key:"k",label:"Entity"},{key:"v",label:"Records",num:true}],[["Products",DB.data.products.length],["Sales",DB.data.sales.length],
         ["Customers",DB.data.customers.length],["Suppliers",DB.data.suppliers.length],["Purchases",DB.data.purchases.length],
@@ -3242,7 +3420,8 @@ VIEWS.settings={title:function(){return t("nav.settings");},render:function(root
     {name:"loyalty_enabled",label:"Loyalty points",type:"select",options:[{value:"1",label:"Enabled"},{value:"0",label:"Disabled"}]},
     {name:"loyalty_earn_per",label:"Points earned per 1 "+(s.currency||"MAD"),type:"number",step:"0.01"},
     {name:"loyalty_point_value",label:"Value of 1 point",type:"number",step:"0.001"},
-    {name:"loyalty_min_redeem",label:"Minimum points to redeem",type:"number",step:"1"}],s);
+    {name:"loyalty_min_redeem",label:"Minimum points to redeem",type:"number",step:"1"},
+    {name:"autolock_minutes",label:"Lock screen after (minutes, 0 = never)",type:"number",step:"1"}],s);
   root.appendChild(el("div",{class:"card",style:"max-width:760px"},[el("h3",{class:"mb",text:"Store Settings"}),form.node,
     el("div",{class:"flex mt",style:"flex-wrap:wrap"},[
       el("button",{class:"btn btn-ghost btn-sm",text:"🧭 Re-run setup wizard",onClick:function(){
@@ -3254,10 +3433,12 @@ VIEWS.settings={title:function(){return t("nav.settings");},render:function(root
       v.scale_price_divisor=parseFloat(v.scale_price_divisor)||100;v.scale_weight_divisor=parseFloat(v.scale_weight_divisor)||1000;
       v.loyalty_earn_per=parseFloat(v.loyalty_earn_per)||1;v.loyalty_point_value=parseFloat(v.loyalty_point_value)||0.01;
       v.loyalty_min_redeem=parseInt(v.loyalty_min_redeem)||0;
+      v.autolock_minutes=Math.max(0,parseInt(v.autolock_minutes)||0);
       if(v.loyalty_point_value<0||v.loyalty_earn_per<0){toast("Loyalty values cannot be negative","error");return false;}
       var need=String(v.scale_prefix||"2").length+v.scale_plu_len+v.scale_value_len+1;
       if(String(v.scale_enabled)==="1"&&need!==13){toast("Scale layout must total 13 digits — currently "+need,"error");return false;}
-      for(var k in v)s[k]=v[k];DB.save();log("update_settings","settings","");toast("Settings saved","success");}})]));
+      for(var k in v)s[k]=v[k];DB.save();log("update_settings","settings","");
+      LockScreen.reset();toast("Settings saved","success");}})]));
 }};
 
 /* ======================================================================
@@ -3408,15 +3589,91 @@ function boot(){DB.load();
   renderShell();
   window.onhashchange=route;
   if(!location.hash)location.hash="#/dashboard";route();
+  LockScreen.reset();
+  /* One automatic restore point per day. */
+  setTimeout(function(){takeSnapshot("daily");},1500);
   /* First run: walk the owner through making this their own. */
   if(needsSetup()&&can("*")){
     setTimeout(function(){setupWizard(function(){renderShell();route();});},260);
   }else if(usingDefaultAdminPassword()&&can("*")){
-    setTimeout(function(){modal("🔐 Change the default password",
+    /* Never stack on top of something the cashier is dealing with (a restored
+       basket, a reconnect prompt); wait until the screen is clear. */
+    var nag=function(){
+      if(document.querySelector(".modal-overlay")){setTimeout(nag,2500);return;}
+      modal("🔐 Change the default password",
       el("div",{},[el("div",{class:"banner banner-warn",
         html:"The <strong>admin</strong> account is still using <strong>admin123</strong>. Anyone who knows it can open your books."}),
         el("p",{class:"hint",text:"Set a new password from the ⋯ menu → Change Password."})]),
-      [{label:"Later",class:"btn-ghost"},{label:"Change it now",class:"btn-primary",onClick:changePassword}]);},400);}}
+      [{label:"Later",class:"btn-ghost"},{label:"Change it now",class:"btn-primary",onClick:changePassword}]);};
+    setTimeout(nag,900);}}
+
+/* ---------- Never show a blank screen ----------------------------------
+   An unexpected error must not strand a cashier mid-shift. We report it,
+   keep the data safe, and offer a way back. */
+var _errCount=0;
+function reportCrash(msg){
+  _errCount++;
+  try{console.error("KAKA POS:",msg);}catch(e){}
+  if(_errCount>3)return;                       /* don't spam on a loop */
+  try{toast("Something went wrong — your data is safe. "+(msg||""),"error");}catch(e){}
+  /* If the shell never rendered, give a recovery screen rather than nothing. */
+  var root=document.getElementById("root");
+  if(root&&!document.getElementById("view")&&!document.querySelector(".login-card")){
+    root.innerHTML="";
+    root.appendChild(el("div",{style:"max-width:520px;margin:12vh auto;padding:24px"},[
+      el("div",{class:"card"},[
+        el("h3",{class:"mb",text:"⚠ The app could not start"}),
+        el("p",{class:"hint mb",text:"Your saved data has not been touched. Try reloading; if it keeps happening, restore a snapshot or a backup."}),
+        el("div",{class:"banner banner-warn",text:String(msg||"Unknown error")}),
+        el("div",{class:"flex mt"},[
+          el("button",{class:"btn btn-primary",text:"Reload",onClick:function(){location.reload();}}),
+          el("button",{class:"btn btn-ghost",text:"Download my data",onClick:function(){
+            try{var blob=new Blob([localStorage.getItem(STORE_KEY)||"{}"],{type:"application/json"});
+              var a2=document.createElement("a");a2.href=URL.createObjectURL(blob);
+              a2.download="kaka_rescue_"+today()+".json";a2.click();}catch(e){}}})])])]));}}
+window.addEventListener("error",function(e){reportCrash(e&&e.message);});
+window.addEventListener("unhandledrejection",function(e){
+  var r=e&&e.reason;reportCrash(r&&(r.message||r));});
+
+/* ---------- Auto-lock ---------------------------------------------------
+   A cashier walks away; the takings should not be one click from anyone. */
+var LockScreen={
+  timer:null,
+  minutes:function(){var m=parseInt(DB.data.settings.autolock_minutes);
+    return isNaN(m)?10:m;},
+  reset:function(){
+    clearTimeout(this.timer);
+    var mins=this.minutes();
+    if(!mins||!SESSION.user)return;
+    var self=this;
+    this.timer=setTimeout(function(){self.lock();},mins*60*1000);},
+  lock:function(){
+    if(!SESSION.user||document.getElementById("lock-screen"))return;
+    var user=SESSION.user;
+    var pw=el("input",{type:"password",placeholder:"Password",
+      style:"font-size:17px;text-align:center;max-width:260px;margin:0 auto"});
+    var err=el("div",{class:"login-error",hidden:true});
+    function unlock(){
+      if(user.password!==hashPw(pw.value)){err.textContent="Wrong password";err.hidden=false;
+        pw.value="";pw.focus();return;}
+      var el2=document.getElementById("lock-screen");if(el2)el2.remove();
+      LockScreen.reset();}
+    pw.addEventListener("keydown",function(e){if(e.key==="Enter")unlock();});
+    var box=el("div",{id:"lock-screen",class:"lock-screen"},[
+      el("div",{class:"login-card",style:"max-width:360px"},[
+        el("div",{class:"login-logo",text:"🔒"}),
+        el("h1",{text:"Screen locked"}),
+        el("p",{class:"login-sub",text:(user.full_name||user.username)+" — enter your password to continue"}),
+        pw,err,
+        el("button",{class:"btn btn-primary btn-block",text:"Unlock",onClick:unlock}),
+        el("button",{class:"btn btn-ghost btn-block",style:"margin-top:8px",text:"Sign out",
+          onClick:function(){var l=document.getElementById("lock-screen");if(l)l.remove();
+            logout();renderLogin();}})])]);
+    document.body.appendChild(box);
+    setTimeout(function(){pw.focus();},80);}
+};
+["click","keydown","mousemove","touchstart"].forEach(function(ev){
+  document.addEventListener(ev,function(){LockScreen.reset();},{passive:true});});
 
 /* Reconnect to the data file (if any) before the first render, so the app
    starts from what is on disk rather than the browser mirror. */
@@ -3435,8 +3692,11 @@ function start(){
   }).catch(function(){DB.load();boot();});}
 
 /* Never leave a queued write unfinished. */
-window.addEventListener("beforeunload",function(){
-  if(FileStore.handle){clearTimeout(DB._fileTimer);FileStore.write(DB.data);}});
+window.addEventListener("beforeunload",function(e){
+  if(FileStore.handle){clearTimeout(DB._fileTimer);FileStore.write(DB.data);}
+  /* Do not let a half-rung sale disappear without a word. */
+  try{var raw=localStorage.getItem(CART_KEY);
+    if(raw&&JSON.parse(raw).cart.length){e.preventDefault();e.returnValue="";return "";}}catch(_){}}); 
 
 start();
 </script>

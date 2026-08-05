@@ -123,7 +123,25 @@ Never share the admin password with staff.
 
 ---
 
-## 8. Need a reminder?
+## 8. If something goes wrong
+
+The app is built to survive a bad day.
+
+- **Power cut in the middle of a sale?** Reopen the app — it offers to bring
+  the basket back exactly as it was.
+- **Pressed Charge twice?** It only ever records one sale.
+- **Someone imported the wrong file, or deleted things by mistake?**
+  **Users → Backup & Data → Restore points** keeps an automatic copy from each
+  of the last 7 days. Pick one and everything goes back.
+- **Numbers look odd?** Same screen → **Data health → Run check**. It compares
+  your stock against its own records and offers to repair anything that
+  disagrees (a copy is saved first).
+- **Walked away from the till?** The screen locks itself after 10 minutes and
+  asks for your password. Change the delay in **Settings**.
+
+---
+
+## 9. Need a reminder?
 
 Press the **❓** button at the top of the screen at any time — shortcuts and
 short how-tos are built in.
