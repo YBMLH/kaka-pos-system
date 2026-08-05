@@ -14,6 +14,7 @@
 <style>
 /* ===== KAKA POS — design system ===================================== */
 :root{
+  --mag:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-4.2-4.2'/%3E%3C/svg%3E");
   --bg:#f1f5f9; --surface:#ffffff; --surface-2:#f8fafc; --surface-3:#f1f5f9;
   --border:#e4e9f0; --border-strong:#cfd8e3;
   --text:#0f172a; --text-muted:#64748b; --text-soft:#94a3b8;
@@ -192,7 +193,7 @@ label{font-size:12.5px;color:var(--text-muted);font-weight:550}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   padding:20px;box-shadow:var(--shadow-xs)}
 .grid{display:grid;gap:16px}
-.stats-grid{grid-template-columns:repeat(auto-fit,minmax(168px,1fr))}
+.stats-grid{grid-template-columns:repeat(auto-fit,minmax(206px,1fr))}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   padding:18px;box-shadow:var(--shadow-xs);transition:.16s;position:relative;overflow:hidden}
 .stat:hover{box-shadow:var(--shadow-md);transform:translateY(-2px)}
@@ -217,8 +218,10 @@ label{font-size:12.5px;color:var(--text-muted);font-weight:550}
 /* ---- Search field with icon ---- */
 .search-wrap{position:relative;flex:1;min-width:180px}
 .search-wrap input{padding-inline-start:38px}
-.search-wrap::before{content:"🔍";position:absolute;inset-inline-start:13px;top:50%;transform:translateY(-50%);
-  font-size:13px;opacity:.5;pointer-events:none}
+.search-wrap::before{content:"";position:absolute;inset-inline-start:13px;top:50%;
+  width:15px;height:15px;transform:translateY(-50%);pointer-events:none;opacity:.45;
+  background:currentColor;color:var(--text-muted);
+  -webkit-mask:var(--mag) center/contain no-repeat;mask:var(--mag) center/contain no-repeat}
 
 /* ---- Chips / segmented ---- */
 .chip-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
@@ -258,8 +261,10 @@ td.num,th.num{text-align:end;font-variant-numeric:tabular-nums}
 .pos-search input{font-size:16px;padding:15px 56px 15px 46px;border-radius:var(--radius);
   box-shadow:var(--shadow-xs);border-width:2px}
 [dir="rtl"] .pos-search input{padding:15px 46px 15px 56px}
-.pos-search::before{content:"⌕";position:absolute;inset-inline-start:17px;top:50%;transform:translateY(-50%);
-  font-size:22px;color:var(--text-soft);pointer-events:none;font-weight:700}
+.pos-search::before{content:"";position:absolute;inset-inline-start:16px;top:50%;
+  width:18px;height:18px;transform:translateY(-50%);pointer-events:none;opacity:.45;
+  background:currentColor;color:var(--text-muted);
+  -webkit-mask:var(--mag) center/contain no-repeat;mask:var(--mag) center/contain no-repeat}
 .pos-suggest{position:absolute;top:calc(100% + 8px);inset-inline:0;background:var(--surface);
   border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);
   max-height:340px;overflow-y:auto;z-index:40;display:none;padding:6px}
@@ -402,6 +407,287 @@ kbd{background:var(--surface-3);border:1px solid var(--border-strong);border-bot
   .toast{max-width:none}
 }
 @media print{.sidebar,.topbar,.toast-root,.toolbar,.cart-actions{display:none!important}.view{padding:0}}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   APPLE-STYLE GLASS LAYER
+   Layered translucent surfaces over a soft mesh background, SF typography,
+   Apple system accents. Loaded after the base rules so it overrides them.
+   Blur is applied only to large structural surfaces — never to list rows or
+   the 60 product tiles — so it stays smooth on modest shop hardware.
+   "Reduce transparency" (Settings) turns every glass surface solid.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root{
+  --accent:#007AFF; --accent-2:#5856D6;
+  --primary:#007AFF; --primary-dark:#0062CC;
+  --primary-soft:rgba(0,122,255,.12);
+  --success:#28A745; --success-soft:rgba(40,167,69,.13);
+  --warning:#FF9500; --warning-soft:rgba(255,149,0,.15);
+  --danger:#FF3B30;  --danger-soft:rgba(255,59,48,.13);
+  --text:#1D1D1F; --text-muted:#6E6E73; --text-soft:#8E8E93;
+  --glass:rgba(255,255,255,.66);
+  --glass-strong:rgba(255,255,255,.80);
+  --glass-line:rgba(255,255,255,.75);
+  --glass-edge:rgba(0,0,0,.06);
+  --blur:22px;
+  --radius:18px; --radius-sm:12px; --radius-xs:9px;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.04);
+  --shadow:0 4px 16px rgba(0,0,0,.06);
+  --shadow-md:0 10px 30px rgba(0,0,0,.09);
+  --shadow-lg:0 24px 70px rgba(0,0,0,.20);
+  --sidebar-text:rgba(235,235,245,.62);
+}
+[data-theme="dark"]{
+  --accent:#0A84FF; --accent-2:#5E5CE6;
+  --primary:#0A84FF; --primary-dark:#409CFF;
+  --primary-soft:rgba(10,132,255,.20);
+  --success:#30D158; --success-soft:rgba(48,209,88,.16);
+  --warning:#FF9F0A; --warning-soft:rgba(255,159,10,.16);
+  --danger:#FF453A;  --danger-soft:rgba(255,69,58,.16);
+  --text:#F5F5F7; --text-muted:rgba(235,235,245,.62); --text-soft:rgba(235,235,245,.40);
+  --glass:rgba(28,28,32,.62);
+  --glass-strong:rgba(30,30,36,.78);
+  --glass-line:rgba(255,255,255,.10);
+  --glass-edge:rgba(255,255,255,.06);
+  --border:rgba(255,255,255,.10);
+  --border-strong:rgba(255,255,255,.18);
+  --surface-2:rgba(255,255,255,.06);
+  --surface-3:rgba(255,255,255,.10);
+  --shadow-lg:0 24px 70px rgba(0,0,0,.65);
+}
+
+/* Mesh background — what the glass actually refracts */
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",
+    "Segoe UI Variable","Segoe UI",Inter,Roboto,"Noto Sans Arabic",sans-serif;
+  letter-spacing:-.01em;
+  background:
+    radial-gradient(1100px 700px at 8% -5%,  rgba(0,122,255,.16), transparent 60%),
+    radial-gradient(900px 650px at 100% 0%,  rgba(88,86,214,.14), transparent 58%),
+    radial-gradient(900px 700px at 50% 108%, rgba(255,149,0,.10), transparent 60%),
+    #F2F3F7;
+  background-attachment:fixed;
+}
+body[data-theme="dark"]{
+  background:
+    radial-gradient(1100px 700px at 8% -5%,  rgba(10,132,255,.20), transparent 60%),
+    radial-gradient(900px 650px at 100% 0%,  rgba(94,92,230,.18), transparent 58%),
+    radial-gradient(900px 700px at 50% 108%, rgba(255,159,10,.10), transparent 60%),
+    #0B0B0F;
+  background-attachment:fixed;
+}
+
+/* ---- Glass surfaces (blurred: structural only) ---- */
+.sidebar{
+  background:linear-gradient(180deg,rgba(22,22,26,.82),rgba(16,16,20,.88));
+  backdrop-filter:blur(28px) saturate(180%);
+  -webkit-backdrop-filter:blur(28px) saturate(180%);
+  border-inline-end:1px solid rgba(255,255,255,.08);
+}
+body:not([data-theme="dark"]) .sidebar{
+  background:linear-gradient(180deg,rgba(28,28,32,.84),rgba(18,18,22,.90));
+}
+.topbar{
+  background:var(--glass-strong);
+  backdrop-filter:blur(var(--blur)) saturate(190%);
+  -webkit-backdrop-filter:blur(var(--blur)) saturate(190%);
+  border-bottom:1px solid var(--glass-edge);
+}
+.card,.stat,.table-wrap,.tabs,.pos-suggest,.dropdown-menu,.modal,.toast,.emoji-grid{
+  background:var(--glass);
+  backdrop-filter:blur(var(--blur)) saturate(180%);
+  -webkit-backdrop-filter:blur(var(--blur)) saturate(180%);
+  border:1px solid var(--glass-edge);
+  box-shadow:var(--shadow),inset 0 1px 0 var(--glass-line);
+}
+.cart{
+  background:var(--glass-strong);
+  backdrop-filter:blur(26px) saturate(190%);
+  -webkit-backdrop-filter:blur(26px) saturate(190%);
+  border-inline-start:1px solid var(--glass-edge);
+}
+.cart-foot{background:transparent;border-top:1px solid var(--glass-edge)}
+.modal{border-radius:22px;box-shadow:var(--shadow-lg),inset 0 1px 0 var(--glass-line)}
+.modal-overlay{background:rgba(0,0,0,.28);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.login-card{
+  background:var(--glass-strong);
+  backdrop-filter:blur(30px) saturate(190%);
+  -webkit-backdrop-filter:blur(30px) saturate(190%);
+  border:1px solid var(--glass-line);
+  box-shadow:var(--shadow-lg),inset 0 1px 0 var(--glass-line);
+}
+
+/* Tiles and rows: translucent but NOT blurred (there can be 60 of them) */
+.pos-tile{
+  background:var(--glass);
+  border:1px solid var(--glass-edge);
+  box-shadow:var(--shadow-xs),inset 0 1px 0 var(--glass-line);
+}
+.pos-tile:hover{
+  background:var(--glass-strong);
+  border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+  box-shadow:var(--shadow-md);
+}
+.pt-thumb{background:rgba(120,120,128,.10)}
+th{background:transparent;backdrop-filter:none;border-bottom:1px solid var(--glass-edge)}
+td{border-bottom:1px solid var(--glass-edge)}
+tbody tr:hover{background:rgba(120,120,128,.08)}
+
+/* ---- Controls ---- */
+.btn{border-radius:12px;font-weight:590;letter-spacing:-.01em;
+  box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.btn:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
+.btn-primary{background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 86%,#000));
+  color:#fff;border:none;box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 34%,transparent)}
+.btn-success{background:linear-gradient(180deg,var(--success),color-mix(in srgb,var(--success) 85%,#000));
+  color:#fff;border:none;box-shadow:0 4px 14px color-mix(in srgb,var(--success) 32%,transparent)}
+.btn-danger{background:linear-gradient(180deg,var(--danger),color-mix(in srgb,var(--danger) 85%,#000));
+  color:#fff;border:none;box-shadow:0 4px 14px color-mix(in srgb,var(--danger) 30%,transparent)}
+.btn-ghost{background:rgba(120,120,128,.10);border:1px solid var(--glass-edge);backdrop-filter:blur(8px)}
+.btn-ghost:hover{background:rgba(120,120,128,.16)}
+.btn-soft{background:var(--primary-soft);color:var(--accent);border:none}
+.icon-btn{background:rgba(120,120,128,.10);border:1px solid var(--glass-edge);border-radius:11px;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.icon-btn:hover{background:rgba(120,120,128,.18)}
+input,select,textarea{
+  background:rgba(255,255,255,.55);border:1px solid var(--glass-edge);border-radius:11px;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{
+  background:rgba(255,255,255,.07)}
+input:focus,select:focus,textarea:focus{
+  border-color:var(--accent);background:var(--glass-strong);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 18%,transparent)}
+.chip{background:rgba(120,120,128,.10);border:1px solid var(--glass-edge);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-weight:560}
+.chip{color:var(--text)}
+.chip:hover{background:rgba(120,120,128,.20)}
+.chip.active{background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 86%,#000));
+  border-color:transparent;color:#fff;box-shadow:0 3px 10px color-mix(in srgb,var(--accent) 32%,transparent)}
+.nav a.active{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 92%,#fff),var(--accent));
+  box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 40%,transparent)}
+.nav a:hover:not(.active){background:rgba(255,255,255,.08)}
+.brand-icon,.login-logo,.user-avatar{
+  background:linear-gradient(145deg,var(--accent),var(--accent-2));
+  box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 35%,transparent)}
+.tab.active{background:var(--glass-strong);box-shadow:var(--shadow-xs)}
+.tabs{padding:4px;border-radius:14px}
+.badge{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.save-chip{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:99px}
+.banner{background:var(--primary-soft);border:1px solid color-mix(in srgb,var(--accent) 22%,transparent);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:14px}
+.banner-warn{background:var(--warning-soft);border-color:color-mix(in srgb,var(--warning) 30%,transparent)}
+.cart-total-row.grand span:last-child{color:var(--accent)}
+.pt-price{color:var(--accent)}
+.login-body{background:
+  radial-gradient(900px 600px at 15% 8%,rgba(0,122,255,.55),transparent 58%),
+  radial-gradient(800px 600px at 85% 92%,rgba(88,86,214,.50),transparent 55%),#0A0A0F}
+.lock-screen{background:
+  radial-gradient(900px 600px at 20% 10%,rgba(0,122,255,.40),transparent 58%),
+  radial-gradient(800px 550px at 80% 90%,rgba(88,86,214,.36),transparent 55%),rgba(10,10,15,.92);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+
+/* ═══ Reduce transparency — Apple's own accessibility escape hatch.
+       Also the right setting for weak hardware or bright shop lighting. ═══ */
+[data-reduce-transparency="1"] .sidebar,
+[data-reduce-transparency="1"] .topbar,
+[data-reduce-transparency="1"] .card,
+[data-reduce-transparency="1"] .stat,
+[data-reduce-transparency="1"] .table-wrap,
+[data-reduce-transparency="1"] .tabs,
+[data-reduce-transparency="1"] .pos-suggest,
+[data-reduce-transparency="1"] .dropdown-menu,
+[data-reduce-transparency="1"] .modal,
+[data-reduce-transparency="1"] .toast,
+[data-reduce-transparency="1"] .cart,
+[data-reduce-transparency="1"] .pos-tile,
+[data-reduce-transparency="1"] .login-card,
+[data-reduce-transparency="1"] .emoji-grid,
+[data-reduce-transparency="1"] .icon-btn,
+[data-reduce-transparency="1"] .chip,
+[data-reduce-transparency="1"] .btn-ghost,
+[data-reduce-transparency="1"] input,
+[data-reduce-transparency="1"] select,
+[data-reduce-transparency="1"] textarea,
+[data-reduce-transparency="1"] .modal-overlay{
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+[data-reduce-transparency="1"]{--glass:#FFFFFF;--glass-strong:#FFFFFF}
+body[data-reduce-transparency="1"]{background:#F2F3F7}
+[data-reduce-transparency="1"] .sidebar{background:#1C1C20}
+[data-reduce-transparency="1"] .modal-overlay{background:rgba(0,0,0,.45)}
+[data-reduce-transparency="1"] input,
+[data-reduce-transparency="1"] select,
+[data-reduce-transparency="1"] textarea{background:#fff;border-color:#D2D2D7}
+[data-theme="dark"][data-reduce-transparency="1"]{--glass:#1C1C20;--glass-strong:#232328}
+body[data-theme="dark"][data-reduce-transparency="1"]{background:#0B0B0F}
+[data-theme="dark"][data-reduce-transparency="1"] input,
+[data-theme="dark"][data-reduce-transparency="1"] select,
+[data-theme="dark"][data-reduce-transparency="1"] textarea{background:#2C2C31;border-color:#3A3A40}
+
+/* Respect the OS setting too */
+@media (prefers-reduced-transparency:reduce){
+  .card,.stat,.table-wrap,.modal,.cart,.topbar,.sidebar,.pos-tile,.login-card{
+    backdrop-filter:none;-webkit-backdrop-filter:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LAYOUT FIXES
+   The POS used height:calc(100vh - 67px) with a hard-coded topbar height.
+   The topbar grew (subtitle + save chip) and pushed the Charge button off a
+   768px-tall till screen. Everything is flex-driven now, so nothing depends
+   on a magic number.
+   ═══════════════════════════════════════════════════════════════════════ */
+.app-shell{height:100vh;overflow:hidden}
+.main{height:100vh;min-height:0}
+.topbar{flex-shrink:0}
+.view{flex:1;min-height:0;overflow-y:auto}
+.view-flush{padding:0;overflow:hidden}          /* POS manages its own scroll */
+.pos-layout{height:100%;min-height:0}
+.pos-left{min-height:0;padding:16px}
+.cart{height:100%;min-height:0;margin:0}
+.cart-items{min-height:0}
+.cart-foot{flex-shrink:0}                        /* Charge is always reachable */
+
+/* Category chips stay on one line and scroll sideways instead of eating
+   three rows of vertical space. */
+.pos-left .chip-row{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;
+  padding-bottom:4px;scrollbar-width:none;flex-shrink:0}
+.pos-left .chip-row::-webkit-scrollbar{display:none}
+.pos-left .chip-row .chip{flex:0 0 auto}
+
+@media (max-width:1280px){
+  .pos-layout{grid-template-columns:1fr 370px}
+  .sidebar{width:224px}
+}
+@media (max-width:1120px){
+  .pos-layout{grid-template-columns:1fr 340px}
+  .pos-grid{grid-template-columns:repeat(auto-fill,minmax(116px,1fr))}
+}
+@media (max-height:820px){
+  .pos-search input{font-size:15px;padding:12px 52px 12px 44px}
+  .pt-thumb{height:44px;margin-bottom:6px}
+  .pt-name{height:32px;font-size:12px}
+  .cart-total-row.grand{font-size:19px;margin:8px 0 2px;padding-top:8px}
+  .cart-total-row.grand span:last-child{font-size:19px}
+  .btn-lg{padding:13px 18px;font-size:15px}
+  .cart-head{padding:12px 16px 10px}
+  .cart-foot{padding:12px 16px}
+}
+@media (max-width:900px){
+  .app-shell{height:auto;overflow:visible}
+  .main{height:auto}
+  .view{overflow:visible}
+  .view-flush{overflow:visible}
+  .pos-layout{height:auto}
+  .cart{height:auto}
+}
+
+
+/* KPI figures must never wrap mid-number */
+.stat-value{font-size:clamp(19px,1.55vw,25px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-top{margin-bottom:10px}
 </style>
 </head>
 <body data-theme="light">
@@ -653,7 +939,7 @@ var DB={
     def(sd,"loyalty_enabled","1");def(sd,"loyalty_earn_per",1);
     def(sd,"loyalty_point_value",0.01);def(sd,"loyalty_min_redeem",100);
     /* Anyone already using the app has effectively finished setup. */
-    def(sd,"autolock_minutes",10);def(sd,"setup_done","1");
+    def(sd,"autolock_minutes",10);def(sd,"reduce_transparency","0");def(sd,"setup_done","1");
     /* An earlier default added up to 12 digits, which is not a valid EAN-13.
        Repair it so scale labels parse. */
     if(String(sd.scale_prefix||"2").length+(parseInt(sd.scale_plu_len)||0)+(parseInt(sd.scale_value_len)||0)+1!==13){
@@ -721,7 +1007,7 @@ var DB={
       scale_enabled:"1",scale_prefix:"2",scale_plu_len:6,scale_value_len:5,scale_mode:"price",
       scale_price_divisor:100,scale_weight_divisor:1000,
       loyalty_enabled:"1",loyalty_earn_per:1,loyalty_point_value:0.01,loyalty_min_redeem:100,
-      autolock_minutes:10,setup_done:""},
+      autolock_minutes:10,reduce_transparency:"0",setup_done:""},
       users:[{id:1,username:"admin",full_name:"System Administrator",password:hashPw("admin123"),role:"administrator",active:1,last_login:null},
              {id:2,username:"cashier",full_name:"Demo Cashier",password:hashPw("cashier123"),role:"cashier",active:1,last_login:null}],
       categories:[],brands:[],suppliers:[
@@ -3421,7 +3707,9 @@ VIEWS.settings={title:function(){return t("nav.settings");},render:function(root
     {name:"loyalty_earn_per",label:"Points earned per 1 "+(s.currency||"MAD"),type:"number",step:"0.01"},
     {name:"loyalty_point_value",label:"Value of 1 point",type:"number",step:"0.001"},
     {name:"loyalty_min_redeem",label:"Minimum points to redeem",type:"number",step:"1"},
-    {name:"autolock_minutes",label:"Lock screen after (minutes, 0 = never)",type:"number",step:"1"}],s);
+    {name:"autolock_minutes",label:"Lock screen after (minutes, 0 = never)",type:"number",step:"1"},
+    {name:"reduce_transparency",label:"Reduce transparency (clearer / faster)",type:"select",
+      options:[{value:"0",label:"Off — frosted glass"},{value:"1",label:"On — solid surfaces"}]}],s);
   root.appendChild(el("div",{class:"card",style:"max-width:760px"},[el("h3",{class:"mb",text:"Store Settings"}),form.node,
     el("div",{class:"flex mt",style:"flex-wrap:wrap"},[
       el("button",{class:"btn btn-ghost btn-sm",text:"🧭 Re-run setup wizard",onClick:function(){
@@ -3438,7 +3726,7 @@ VIEWS.settings={title:function(){return t("nav.settings");},render:function(root
       var need=String(v.scale_prefix||"2").length+v.scale_plu_len+v.scale_value_len+1;
       if(String(v.scale_enabled)==="1"&&need!==13){toast("Scale layout must total 13 digits — currently "+need,"error");return false;}
       for(var k in v)s[k]=v[k];DB.save();log("update_settings","settings","");
-      LockScreen.reset();toast("Settings saved","success");}})]));
+      LockScreen.reset();applyTransparency();toast("Settings saved","success");}})]));
 }};
 
 /* ======================================================================
@@ -3471,7 +3759,13 @@ var PAGE_SUB={dashboard:"Business overview",pos:"Sell and take payment",products
 
 function applyLang(lang){SESSION.lang=lang;localStorage.setItem("kaka_lang",lang);
   document.documentElement.lang=lang;document.documentElement.dir=lang==="ar"?"rtl":"ltr";}
-function applyTheme(theme){SESSION.theme=theme;localStorage.setItem("kaka_theme",theme);document.body.setAttribute("data-theme",theme);}
+function applyTheme(theme){SESSION.theme=theme;localStorage.setItem("kaka_theme",theme);document.body.setAttribute("data-theme",theme);
+  applyTransparency();}
+/* Apple-style "Reduce transparency": turns every frosted surface solid.
+   Also the right choice on weak hardware or under harsh shop lighting. */
+function applyTransparency(){
+  var on=String((DB.data&&DB.data.settings&&DB.data.settings.reduce_transparency)||"0")==="1";
+  document.body.setAttribute("data-reduce-transparency",on?"1":"0");}
 
 function renderLogin(){var root=document.getElementById("root");
   applyLang(SESSION.lang);applyTheme(SESSION.theme);
@@ -3575,6 +3869,7 @@ function route(){var id=(location.hash||"#/dashboard").replace("#/","")||"dashbo
   document.getElementById("page-title").textContent=VIEWS[id].title();
   var sub=document.getElementById("page-sub");if(sub)sub.textContent=PAGE_SUB[id]||"";
   document.getElementById("sidebar").classList.remove("open");var view=document.getElementById("view");view.scrollTop=0;
+  view.classList.toggle("view-flush",id==="pos");
   try{VIEWS[id].render(view);}catch(e){view.innerHTML='<div class="empty">Error: '+esc(e.message)+"</div>";console.error(e);}
   refreshNavBadges();}
 /* Keep sidebar badges in sync after actions change stock / held sales. */

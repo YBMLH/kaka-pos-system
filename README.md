@@ -92,6 +92,14 @@ loads it back on any machine.
   shortages are valued at cost and subtracted from net profit.
 - **Languages.** English, French and Arabic with full RTL, plus light/dark
   themes.
+- **Look and feel.** Apple-style frosted glass: layered translucent surfaces
+  over a soft mesh background, SF typography and Apple system accents. Blur is
+  limited to large structural surfaces (sidebar, top bar, cards, cart, dialogs)
+  and never applied to list rows or product tiles, so it stays smooth on modest
+  till hardware. **Settings → Reduce transparency** turns every surface solid
+  for weak machines or harsh shop lighting, and the OS
+  `prefers-reduced-transparency` / `prefers-reduced-motion` settings are
+  respected automatically.
 - **Search.** `coca`, `Coca-Cola`, `cocacola` and `كوكا` all find the same
   product — accent-insensitive, Arabic-normalized and typo-tolerant.
 
