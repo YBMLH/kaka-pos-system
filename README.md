@@ -127,8 +127,13 @@ loads it back on any machine.
   include the tax (retail) or it is added at the till (wholesale).
 - **Losses hit the P&L.** Damage, expiry, theft, breakage and stocktake
   shortages are valued at cost and subtracted from net profit.
-- **Languages.** English, French and Arabic with full RTL, plus light/dark
-  themes.
+- **Languages.** Set the language to **Français** and the whole app is French —
+  every screen, dialog, message, table, printed receipt and Z-report, not just
+  the menus. Arabic covers the navigation and till with full RTL; the rest of
+  its screens stay in English. Translation happens at the single point every
+  piece of text passes through on its way to the screen, so nothing had to be
+  rewired call site by call site — and anything the app does not recognise
+  (product names, notes, amounts) is left exactly as typed.
 - **Look and feel.** Apple-style frosted glass: layered translucent surfaces
   over a soft mesh background, SF typography and Apple system accents. Blur is
   limited to large structural surfaces (sidebar, top bar, cards, cart, dialogs)
