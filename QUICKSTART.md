@@ -9,6 +9,10 @@
 Double-click **`index.html`**. It opens in your browser and works without
 internet.
 
+Use **Chrome** or **Edge** if the computer has one — only those can save your
+data straight to a file. On Windows 7 that means **Chrome 109**, the last
+version Windows 7 accepts.
+
 **Tip:** right-click it → *Send to → Desktop* to make a shortcut, or drag the
 address into your browser's bookmarks bar so it is one click away every morning.
 

@@ -56,10 +56,16 @@ Because it is a normal file you can put it on a USB stick, a shared folder, or
 anything your usual PC backup already copies. **Open an existing data file…**
 loads it back on any machine.
 
-> Writing files needs **Chrome or Edge on desktop**. Other browsers keep using
+> Writing files needs **Chrome or Edge on desktop** (Chrome 86+, so Chrome 109
+> — the last release for Windows 7 — is fine). Other browsers keep using
 > browser storage — the app says so, and Export/Import backups still work.
 > A copy is always kept in the browser as a fallback, so a disconnected or
 > unsupported file never loses your data.
+>
+> On a browser that cannot own a file, the app instead hands the browser a
+> dated backup file every N sales and at register close (**Settings →
+> Automatic backup file every N sales**), so real files still land on the disk
+> without anyone having to remember.
 
 ---
 
@@ -98,6 +104,16 @@ loads it back on any machine.
   money without touching profit; a supplier paid in cash or a till expense also
   creates an expense record. Closing the register and the Z-report both count
   these movements.
+- **Old machines are handled.** The app checks what the browser can actually
+  do and adapts: no emoji font (Windows 7 and earlier) switches every icon to
+  plain words and shows a product's initial instead of a picture; no
+  `color-mix()` (Chrome 109, Firefox 52) restores solid button colours; no
+  flexbox `gap` (anything pre-2020) falls back to margins. Force either icon
+  style in **Settings → Icons**.
+- **Storage has a floor, not a cliff.** Without a data file the browser gives
+  about 5 MB — roughly 1,500 products and a month of sales. The app warns at
+  75%, and **Backup & Data → Archive sales older than 90 days / 1 year** writes
+  them to a file you keep and clears the space.
 - **Tax is optional.** New shops start with **no tax** — the price on the shelf
   is exactly what the customer pays, and no tax line appears on screen, on the
   receipt or in the reports. Shops that do charge it turn it on in
@@ -119,6 +135,15 @@ loads it back on any machine.
   product — accent-insensitive, Arabic-normalized and typo-tolerant.
 
 ---
+
+## Which browser
+
+| Machine | Browser | Data file | Notes |
+|---|---|---|---|
+| Windows 10 / 11, current | Chrome or Edge | ✅ automatic | Everything on |
+| **Windows 7** | **Chrome 109** (last for Win7) | ✅ automatic | Icons switch to words — Win7's emoji font is incomplete |
+| Windows XP | Firefox 52.9 ESR (last for XP) | ❌ | Words instead of icons, automatic backup files instead of a data file |
+| Firefox, any version | Firefox | ❌ | Browser storage + backups |
 
 ## Hardware
 

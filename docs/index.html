@@ -688,6 +688,76 @@ body[data-theme="dark"][data-reduce-transparency="1"]{background:#0B0B0F}
 .stat-value{font-size:clamp(19px,1.55vw,25px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stat-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stat-top{margin-bottom:10px}
+/* ================= Older browsers (Firefox 52 on Windows XP) =============
+   The last browsers that run on XP predate flexbox `gap`, logical
+   properties, clamp() and grid's `gap` shorthand. Everything below is a
+   fallback that only switches on when the browser proves it lacks the
+   modern equivalent, so nothing changes on a current machine.
+   `body.legacy-gap` is set at start-up by a live measurement. ========== */
+.legacy-gap .flex>*+*{margin-left:8px}
+[dir="rtl"] .legacy-gap .flex>*+*{margin-left:0;margin-right:8px}
+.legacy-gap .chip-row>*+*{margin-left:8px}
+[dir="rtl"] .legacy-gap .chip-row>*+*{margin-left:0;margin-right:8px}
+.legacy-gap .toolbar>*+*{margin-left:10px}
+[dir="rtl"] .legacy-gap .toolbar>*+*{margin-left:0;margin-right:10px}
+.legacy-gap .cart-actions>*+*{margin-left:10px}
+.legacy-gap .modal-foot>*+*{margin-left:10px}
+.legacy-gap .toast+.toast{margin-top:10px}
+/* Grid used `grid-gap` before the shorthand was renamed. */
+.legacy-gap .grid{grid-gap:16px}
+.legacy-gap .form-grid{grid-gap:14px}
+.legacy-gap .stats-grid{grid-gap:16px}
+.legacy-gap .pos-grid{grid-gap:12px}
+/* Logical properties arrived after these browsers; give them the physical
+   equivalent first so the layout is right in left-to-right shops. */
+.legacy-gap .dropdown-menu{right:0}
+[dir="rtl"] .legacy-gap .dropdown-menu{right:auto;left:0}
+.legacy-gap .search-wrap::before,.legacy-gap .pos-search::before{left:13px}
+[dir="rtl"] .legacy-gap .search-wrap::before,[dir="rtl"] .legacy-gap .pos-search::before{left:auto;right:13px}
+.legacy-gap .pos-suggest{left:0;right:0}
+.legacy-gap .pt-low{right:8px}
+[dir="rtl"] .legacy-gap .pt-low{right:auto;left:8px}
+.legacy-gap .toast-root{right:22px}
+[dir="rtl"] .legacy-gap .toast-root{right:auto;left:22px}
+.legacy-gap .stat-value{font-size:21px}
+/* Buttons that were only an icon now carry a word, so let them size to it. */
+.no-emoji .icon-btn{width:auto;min-width:38px;padding:0 10px;font-size:12.5px;font-weight:620}
+.no-emoji .pos-cam{height:34px}
+.no-emoji .emoji-grid{display:block}
+/* A product with no photo and no emoji font shows its initial. */
+.pt-letter{font-weight:800;color:var(--primary);letter-spacing:.5px;
+  background:var(--surface-3);text-transform:uppercase}
+.pos-tile .pt-letter{font-size:26px}
+/* Browsers without color-mix() throw away every declaration that uses it —
+   that is Firefox 52 on Windows XP and Chrome 109, the last Chrome for
+   Windows 7. Without these the buttons would lose their colour entirely. */
+.no-color-mix .btn-primary{background:var(--accent);color:#fff;border:none}
+.no-color-mix .btn-success{background:var(--success);color:#fff;border:none}
+.no-color-mix .btn-danger{background:var(--danger);color:#fff;border:none}
+.no-color-mix .chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.no-color-mix .nav a.active{background:var(--accent);color:#fff}
+.no-color-mix .topbar{background:var(--surface)}
+.no-color-mix .wiz-dot.done{background:var(--primary)}
+.no-color-mix .chart-bar{background:var(--primary)}
+.no-color-mix .chart-bar.profit{background:var(--success)}
+.no-color-mix .banner{border:1px solid var(--border)}
+.no-color-mix .banner-warn{border-color:var(--warning)}
+.no-color-mix input:focus,.no-color-mix select:focus,.no-color-mix textarea:focus{box-shadow:none}
+/* The magnifier is drawn with a CSS mask, which these browsers render as a
+   solid square. Hide it and give the field its padding back. */
+.legacy-gap .search-wrap::before,.legacy-gap .pos-search::before{display:none}
+.legacy-gap .search-wrap input{padding-left:12px;padding-right:12px}
+.legacy-gap .pos-search input{padding-left:16px;padding-right:74px}
+[dir="rtl"] .legacy-gap .pos-search input{padding-left:74px;padding-right:16px}
+/* Same for the top bar's own action row and the camera button, which use
+   spacing and logical positioning these browsers never learned. */
+.legacy-gap .topbar-actions>*+*{margin-left:8px}
+[dir="rtl"] .legacy-gap .topbar-actions>*+*{margin-left:0;margin-right:8px}
+.legacy-gap .topbar-actions{margin-left:auto}
+[dir="rtl"] .legacy-gap .topbar-actions{margin-left:0;margin-right:auto}
+.legacy-gap .cart-head>*+*{margin-left:8px}
+.legacy-gap .pos-cam{right:8px !important;left:auto !important}
+[dir="rtl"] .legacy-gap .pos-cam{right:auto !important;left:8px !important}
 </style>
 </head>
 <body data-theme="light">
@@ -743,6 +813,75 @@ function loadActiveCart(){
     if(d.at&&(Date.now()-new Date(d.at).getTime())>12*3600*1000)return null;
     return d;}catch(e){return null;}}
 function clearActiveCart(){try{localStorage.removeItem(CART_KEY);}catch(e){}}
+
+/* ---------- Automatic backup files -------------------------------------
+   Browsers older than 2020 cannot write to a file the app chooses, so on
+   those machines everything lives in browser storage — a few megabytes that
+   a cleanup tool can wipe. To make that safe, the app hands the browser a
+   dated backup file every so often. Firefox and Chrome drop it straight into
+   the download folder, so the shop ends up with real files on the disk
+   without anyone remembering to do anything. */
+function downloadJSON(filename,data){
+  try{
+    var blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+    var a=document.createElement("a");
+    var url=URL.createObjectURL(blob);
+    a.href=url;a.download=filename;a.style.display="none";
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){a.parentNode&&a.parentNode.removeChild(a);
+      try{URL.revokeObjectURL(url);}catch(e){}},400);
+    return true;
+  }catch(e){return false;}}
+function stampName(prefix){
+  var d=new Date();
+  function two(n){return (n<10?"0":"")+n;}
+  return prefix+"-"+d.getFullYear()+"-"+two(d.getMonth()+1)+"-"+two(d.getDate())+
+    "-"+two(d.getHours())+two(d.getMinutes())+".json";}
+/* How many sales between automatic backups; 0 turns it off. */
+function autoBackupEvery(){
+  var n=parseInt(DB.data.settings.auto_backup_every);
+  if(isNaN(n))n=(FileStore.supported()?0:20);
+  return Math.max(0,n);}
+var salesSinceBackup=0;
+function autoBackupTick(force){
+  /* With a real data file connected there is nothing to protect against. */
+  if(FileStore.handle&&!force)return false;
+  var every=autoBackupEvery();
+  if(!force&&(!every||++salesSinceBackup<every))return false;
+  salesSinceBackup=0;
+  var ok=downloadJSON(stampName("kaka-backup"),DB.data);
+  if(ok){DB.data.settings.last_auto_backup=new Date().toISOString();
+    try{localStorage.setItem(STORE_KEY,JSON.stringify(DB.data));}catch(e){}
+    log("auto_backup","backup",""); }
+  return ok;}
+/* Shout once per session when browser storage starts filling up. */
+var storageWarned=false;
+function checkStorageRoom(){
+  if(FileStore.handle||storageWarned)return;
+  var pct=Math.round(DB.usage()/5242880*100);
+  if(pct<75)return;
+  storageWarned=true;
+  toast("Browser storage is "+pct+"% full — export a backup and archive old sales (Users → Backup & Data)","error");}
+
+/* Move sales older than `days` into a file the shop keeps, then drop them
+   from storage. Reports stop covering that period, so it asks first and only
+   removes anything once the file has actually been handed to the browser. */
+function archiveOldSales(days,onDone){
+  var cut=new Date();cut.setDate(cut.getDate()-days);
+  var old=(DB.data.sales||[]).filter(function(s){return new Date(s.created_at)<cut;});
+  if(!old.length){toast("No sales older than "+days+" days","success");return;}
+  var total=old.reduce(function(a,s){return a+(s.total||0);},0);
+  confirmModal("Archive "+old.length+" sale(s) older than "+days+" days, worth "+money(total)+
+    "? They are saved to a file first, then removed from this computer. Reports will no longer include them.",
+    function(){
+      var ok=downloadJSON(stampName("kaka-sales-archive"),
+        {archived_at:new Date().toISOString(),older_than_days:days,sales:old});
+      if(!ok){toast("Could not save the archive file — nothing was removed","error");return;}
+      var keep={};old.forEach(function(s){keep[s.id]=true;});
+      DB.data.sales=DB.data.sales.filter(function(s){return !keep[s.id];});
+      DB.save();log("archive_sales","sales",old.length+" sales older than "+days+" days");
+      toast(old.length+" sale(s) archived to your downloads","success");
+      if(onDone)onDone();});}
 
 /* ---------- Rolling snapshots ------------------------------------------
    A daily copy of the whole dataset is kept in IndexedDB (far roomier than
@@ -949,6 +1088,9 @@ var DB={
     def(sd,"prices_include_tax","0");def(sd,"setup_done","1");
     /* Existing installs keep whatever they had; a rate of 0 means no tax. */
     def(sd,"tax_enabled",(parseFloat(sd.tax_rate)>0?"1":"0"));
+    def(sd,"icon_mode","auto");
+    /* Browsers that cannot own a file get automatic backup downloads. */
+    def(sd,"auto_backup_every",(FileStore.supported()?0:20));def(sd,"last_auto_backup","");
     /* An earlier default added up to 12 digits, which is not a valid EAN-13.
        Repair it so scale labels parse. */
     if(String(sd.scale_prefix||"2").length+(parseInt(sd.scale_plu_len)||0)+(parseInt(sd.scale_value_len)||0)+1!==13){
@@ -1016,7 +1158,9 @@ var DB={
       scale_enabled:"1",scale_prefix:"2",scale_plu_len:6,scale_value_len:5,scale_mode:"price",
       scale_price_divisor:100,scale_weight_divisor:1000,
       loyalty_enabled:"1",loyalty_earn_per:1,loyalty_point_value:0.01,loyalty_min_redeem:100,
-      autolock_minutes:10,reduce_transparency:"0",tax_enabled:"0",prices_include_tax:"1",setup_done:""},
+      autolock_minutes:10,reduce_transparency:"0",icon_mode:"auto",
+      auto_backup_every:(FileStore.supported()?0:20),last_auto_backup:"",
+      tax_enabled:"0",prices_include_tax:"1",setup_done:""},
       users:[{id:1,username:"admin",full_name:"System Administrator",password:hashPw("admin123"),role:"administrator",active:1,last_login:null},
              {id:2,username:"cashier",full_name:"Demo Cashier",password:hashPw("cashier123"),role:"cashier",active:1,last_login:null}],
       categories:[],brands:[],suppliers:[
@@ -1136,7 +1280,7 @@ function setupWizard(onDone){
   function draw(){
     clear(body);drawDots();
     backBtn.style.visibility=step>1?"visible":"hidden";
-    nextBtn.textContent=step===TOTAL?"Finish setup ✓":"Continue →";
+    setText(nextBtn,step===TOTAL?"Finish setup ✓":"Continue →");
     if(step===1){
       titleEl.textContent="Welcome — let's set up your shop";
       var langRow=el("div",{class:"chip-row mb"});
@@ -1247,13 +1391,82 @@ function setupWizard(onDone){
   draw();}
 
 /* ---------- DOM helpers ------------------------------------------------- */
+/* Flexbox spacing via `gap` landed long after the last browser that runs on
+   Windows XP. Measure it instead of sniffing the browser, and let the CSS
+   fall back to margins when it is missing. */
+var LEGACY_GAP=null,COLOR_MIX=null;
+function flexGapSupported(){
+  if(LEGACY_GAP!==null)return LEGACY_GAP;
+  try{
+    var f=document.createElement("div");
+    f.style.cssText="display:flex;gap:8px;position:absolute;visibility:hidden;top:-999px";
+    var a=document.createElement("div"),b=document.createElement("div");
+    a.style.cssText=b.style.cssText="width:1px;height:1px";
+    f.appendChild(a);f.appendChild(b);
+    document.body.appendChild(f);
+    LEGACY_GAP=f.scrollWidth>5;
+    f.parentNode.removeChild(f);
+  }catch(e){LEGACY_GAP=true;}
+  return LEGACY_GAP;}
+/* color-mix() only reached Chrome in 2023, so the last Chrome for Windows 7
+   drops every declaration that uses it — including the buttons' colours. */
+function colorMixSupported(){
+  if(COLOR_MIX!==null)return COLOR_MIX;
+  try{COLOR_MIX=!!(window.CSS&&CSS.supports&&CSS.supports("color","color-mix(in srgb,#000 50%,#fff)"));}
+  catch(e){COLOR_MIX=false;}
+  return COLOR_MIX;}
+function applyLegacyLayout(){
+  if(!flexGapSupported())document.body.className+=" legacy-gap";
+  if(!colorMixSupported())document.body.className+=" no-color-mix";}
+
+/* ---- Plain-text mode for machines with no emoji font --------------------
+   Windows XP and other pre-2012 systems ship no emoji font at all, so every
+   icon in this app would render as an empty box. Detect that once and fall
+   back to words, which read better on an old low-resolution till anyway.
+   The owner can force either mode from Settings if the guess is wrong. */
+var EMOJI_OK=true;
+function detectEmojiSupport(){
+  var pref=String((DB.data&&DB.data.settings&&DB.data.settings.icon_mode)||"auto");
+  if(pref==="text")return false;
+  if(pref==="emoji")return true;
+  try{
+    var c=document.createElement("canvas");c.width=c.height=18;
+    var x=c.getContext("2d");if(!x)return true;
+    x.textBaseline="top";x.font="16px sans-serif";
+    /* Test a recent emoji (the receipt, Unicode 11) against a character that
+       is missing everywhere. Windows 7 draws older symbols but not newer
+       ones, and a half-drawn icon set looks worse than none, so anything
+       short of a complete modern emoji font falls back to words. */
+    x.fillText("\uD83E\uDDFE",0,0);var withEmoji=c.toDataURL();
+    x.clearRect(0,0,18,18);x.fillText("\uFFFF",0,0);
+    return withEmoji!==c.toDataURL();
+  }catch(e){return true;}}
+/* Symbols that carry meaning alone get a plain stand-in; the rest already sit
+   beside a word, so they simply disappear. Arrows, geometric shapes and box
+   drawing are left alone — Arial and Tahoma have had those since the 1990s. */
+var TEXT_ICONS={"\uFF0B":"+","\u2795":"+","\u2715":"\u00d7","\u2716":"\u00d7","\u26a0":"!","\u2630":"=","\u22ef":"...","\u2026":"..."};
+var PICTO_RE=/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2194-\u21FF\u2300-\u23FF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u20E3\uFF0B\u22EF]/g;
+/* Text set straight onto a node (outside el) has to go through the same
+   filter, or an icon survives as an empty box on those machines. */
+function setText(node,v){node.textContent=EMOJI_OK?v:plainText(v);}
+function plainText(v){
+  return String(v).replace(PICTO_RE,function(m){
+      return TEXT_ICONS[m]!==undefined?TEXT_ICONS[m]:"";})
+    .replace(/  +/g," ").replace(/^ +| +$/g,"");}
+
 function el(tag,attrs,children){var n=document.createElement(tag);
   if(attrs)for(var k in attrs){var v=attrs[k];if(v==null||v===false)continue;
-    if(k==="class")n.className=v;else if(k==="html")n.innerHTML=v;else if(k==="text")n.textContent=v;
+    if(k==="class")n.className=v;
+    else if(k==="html")n.innerHTML=EMOJI_OK?v:plainText(v);
+    else if(k==="text")n.textContent=EMOJI_OK?v:plainText(v);
     else if(k.slice(0,2)==="on"&&typeof v==="function")n.addEventListener(k.slice(2).toLowerCase(),v);
     else if(v===true)n.setAttribute(k,"");else n.setAttribute(k,v);}
   if(children!=null){(Array.isArray(children)?children:[children]).forEach(function(c){
-    if(c==null||c===false)return;n.appendChild(typeof c==="string"?document.createTextNode(c):c);});}
+    if(c==null||c===false)return;
+    n.appendChild(typeof c==="string"?document.createTextNode(EMOJI_OK?c:plainText(c)):c);});}
+  /* An icon-only button would be left blank: label it with its own tooltip. */
+  if(!EMOJI_OK&&attrs&&attrs.title&&!n.textContent&&(attrs.html||attrs.text))
+    n.textContent=String(attrs.title).split(" ")[0];
   return n;}
 function esc(s){var d=document.createElement("div");d.textContent=s==null?"":s;return d.innerHTML;}
 function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
@@ -1300,7 +1513,7 @@ function badge(text,color){return '<span class="badge badge-'+color+'">'+esc(tex
 var STAT_ICON={blue:"📈",green:"💰",orange:"📦",red:"💸"};
 function statCard(label,value,sub,accent,icon){return el("div",{class:"stat stat-accent-"+accent},[
   el("div",{class:"stat-top"},[el("div",{class:"stat-label",text:label}),
-    el("div",{class:"stat-icon",text:icon||STAT_ICON[accent]||"•"})]),
+    EMOJI_OK?el("div",{class:"stat-icon",text:icon||STAT_ICON[accent]||"•"}):null]),
   el("div",{class:"stat-value",text:value}),el("div",{class:"stat-sub",text:sub||""})]);}
 function barChart(data){var max=1;data.forEach(function(d){max=Math.max(max,d.value,d.value2||0);});
   return el("div",{class:"chart"},data.map(function(d){var kids=[];
@@ -1593,7 +1806,7 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
   var searchInput=el("input",{type:"text",placeholder:t("pos.search_placeholder"),id:"pos-search",autocomplete:"off"});
   var suggest=el("div",{class:"pos-suggest"});var grid=el("div",{class:"pos-grid"});
   var chipRow=el("div",{class:"chip-row"});
-  var camBtn=el("button",{class:"icon-btn",title:"Scan with camera",text:"📷",
+  var camBtn=el("button",{class:"icon-btn pos-cam",title:"Scan with camera",text:"📷",
     style:"position:absolute;inset-inline-end:8px;top:50%;transform:translateY(-50%)",
     onClick:function(){cameraScanModal(function(code){searchInput.value=code;doSearch(code,true);});}});
   var left=el("div",{class:"pos-left"},[el("div",{class:"pos-search"},[searchInput,camBtn,suggest]),
@@ -1650,7 +1863,8 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
     if(e.key==="F2"){e.preventDefault();searchInput.focus();}
     else if(e.key==="F4"){e.preventDefault();if(state.cart.length)openPayment(totals());}};
   document.addEventListener("keydown",window._posKey);
-  function updateHeldLabel(){var n=(DB.data._held||[]).length;heldLabel.textContent="❚❚ "+t("pos.held")+(n?" ("+n+")":"");}
+  function updateHeldLabel(){var n=(DB.data._held||[]).length;
+    setText(heldLabel,"❚❚ "+t("pos.held")+(n?" ("+n+")":""));}
   var activeCat="";
   var catEmoji=catEmojiFor;
   function renderChips(){clear(chipRow);
@@ -2005,6 +2219,9 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
     state.cart=[];state.discount=0;state.customer_id=null;custLabel.textContent=t("pos.walk_in");
     clearActiveCart();renderCart();loadTiles();searchInput.focus();
     charging=false;
+    /* On machines that cannot write a data file, drop a dated backup into the
+       download folder every so often, and speak up before storage fills. */
+    autoBackupTick();checkStorageRoom();
     showComplete(sale);}
   function showComplete(sale){var body=el("div",{style:"text-align:center"},[
     el("div",{class:"stat-value up",text:money(sale.total)}),
@@ -2099,7 +2316,12 @@ function catEmojiFor(name){var n=(name||"").toLowerCase();
 /* Renders the thumbnail used on POS tiles and list rows. */
 function productThumb(p,cls){
   if(p.image)return el("div",{class:cls||"pt-thumb",style:"background-image:url("+p.image+");background-size:cover;background-position:center"});
+  /* No emoji font — a letter reads better than an empty box. */
+  if(!EMOJI_OK)return el("div",{class:(cls||"pt-thumb")+" pt-letter",text:productInitial(p)});
   return el("div",{class:cls||"pt-thumb",text:productEmoji(p)});}
+function productInitial(p){
+  var n=((p.name_en||p.name_ar||p.name_fr||"?")+"").replace(/^ +/,"");
+  return (n.charAt(0)||"?").toUpperCase();}
 /* Downscale an uploaded file into a square data URL (default 160px). */
 function fileToThumbDataURL(file,size,cb){
   size=size||160;var reader=new FileReader();
@@ -2117,15 +2339,17 @@ function imagePicker(product){
   function paint(){clear(preview);preview.style.backgroundImage="";
     if(state.image){preview.style.backgroundImage="url("+state.image+")";
       preview.style.backgroundSize="cover";preview.style.backgroundPosition="center";}
-    else preview.textContent=state.emoji||productEmoji(product);}
+    else preview.textContent=EMOJI_OK?(state.emoji||productEmoji(product)):productInitial(product);}
   paint();
   var grid=el("div",{class:"emoji-grid"});
-  EMOJI_SET.forEach(function(e){grid.appendChild(el("button",{type:"button",
+  if(EMOJI_OK)EMOJI_SET.forEach(function(e){grid.appendChild(el("button",{type:"button",
     class:"emoji-opt"+(state.emoji===e?" active":""),text:e,onClick:function(){
       state.emoji=(state.emoji===e)?"":e;
       var opts=grid.querySelectorAll(".emoji-opt");
       for(var i=0;i<opts.length;i++)opts[i].classList.toggle("active",opts[i].textContent===state.emoji);
       paint();}}));});
+  else grid.appendChild(el("div",{class:"hint",
+    text:"This computer has no emoji font, so products show the first letter of their name until you upload a photo."}));
   var file=el("input",{type:"file",accept:"image/*",style:"display:none"});
   file.addEventListener("change",function(){var f=file.files[0];if(!f)return;
     fileToThumbDataURL(f,160,function(url){if(!url){toast("Could not read that image","error");return;}
@@ -3319,7 +3543,9 @@ VIEWS.register={title:function(){return t("nav.register");},render:function(root
       el("div",{class:"field mb"},[el("label",{text:"Counted Cash"}),counted]),el("div",{class:"flex mb",style:"justify-content:space-between"},[el("span",{text:"Difference"}),diffEl]),
       el("button",{class:"btn btn-danger btn-block",text:"Close Register",onClick:function(){var c=parseFloat(counted.value)||0;var diff=Math.round((c-expected)*100)/100;
         open.status="closed";open.counted_cash=c;open.closing_cash=c;open.expected_cash=Math.round(expected*100)/100;open.difference=diff;open.closed_at=new Date().toISOString();
-        DB.save();log("close_register","register","difference="+diff);toast("Closed. Difference: "+money(diff),diff===0?"success":"error");VIEWS.register.render(root);}})]));}
+        DB.save();log("close_register","register","difference="+diff);
+        if(!FileStore.handle&&autoBackupEvery())autoBackupTick(true);
+        toast("Closed. Difference: "+money(diff),diff===0?"success":"error");VIEWS.register.render(root);}})]));}
   if(!open)root.appendChild(drawerCard(null));
 
   function cashSalesSince(reg){var n=0;
@@ -3820,7 +4046,7 @@ VIEWS.users={title:function(){return t("nav.users");},render:function(root){
           confirmModal("Load the data from "+FileStore.name+"? It replaces what is currently in this browser.",function(){
             DB.data=parsed;DB.migrate();DB.save();
             toast("Loaded "+FileStore.name,"success");
-            drawFile();render();});
+            renderShell();route();});
         }else{
           /* Empty or unrelated file — adopt it as the destination instead. */
           DB.flush().then(function(){toast("Now saving to "+FileStore.name,"success");drawFile();});}
@@ -3835,7 +4061,7 @@ VIEWS.users={title:function(){return t("nav.users");},render:function(root){
           var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="kaka_backup_"+today()+".json";a.click();log("backup_export","backup","");toast("Backup exported","success");}}),
         (function(){var fi=el("input",{type:"file",accept:".json",style:"display:none"});fi.addEventListener("change",function(){var f=fi.files[0];if(!f)return;
           var rd=new FileReader();rd.onload=function(){try{var d=JSON.parse(rd.result);if(!d.products||!d.settings)throw 0;
-            confirmModal("Restore this backup? Current data will be replaced.",function(){DB.data=d;DB.save();toast("Backup restored","success");render();});}catch(e){toast("Invalid backup file","error");}};rd.readAsText(f);});
+            confirmModal("Restore this backup? Current data will be replaced.",function(){DB.data=d;DB.migrate();DB.save();toast("Backup restored","success");renderShell();route();});}catch(e){toast("Invalid backup file","error");}};rd.readAsText(f);});
           var b=el("button",{class:"btn btn-ghost",text:"⬆ Restore Backup",onClick:function(){fi.click();}});return el("span",{},[b,fi]);})(),
         el("button",{class:"btn btn-danger",text:"🗑 Reset All Data",onClick:function(){confirmModal("Erase ALL data and reload sample data? This cannot be undone.",function(){DB.reset();toast("Data reset","success");
           SESSION.user=null;boot();});}})])]));
@@ -3846,7 +4072,31 @@ VIEWS.users={title:function(){return t("nav.users");},render:function(root){
         el("span",{class:"badge badge-"+(pct>85?"red":(pct>60?"orange":"green")),text:pct+"%"})]),
       el("div",{style:"height:8px;border-radius:99px;background:var(--surface-3);margin-top:8px;overflow:hidden"},
         el("div",{style:"height:100%;width:"+pct+"%;background:var("+(pct>85?"--danger":(pct>60?"--warning":"--success"))+")"})),
-      pct>85?el("div",{class:"banner banner-warn mt",text:"Storage is nearly full. Export a backup, then remove product photos or delete old sales."}):null]));
+      pct>85?el("div",{class:"banner banner-warn mt",text:"Storage is nearly full. Export a backup, then remove product photos or delete old sales."}):null,
+      /* Old sales are what fills this space; move them to a file on disk. */
+      el("div",{class:"hint mt",text:"Old sales take up most of this space. Archiving writes them to a file you keep, then clears them out to make room."}),
+      el("div",{class:"flex mt",style:"flex-wrap:wrap"},[
+        el("button",{class:"btn btn-ghost btn-sm",text:"🗃 Archive sales older than 90 days",
+          onClick:function(){archiveOldSales(90,draw);}}),
+        el("button",{class:"btn btn-ghost btn-sm",text:"🗃 …older than 1 year",
+          onClick:function(){archiveOldSales(365,draw);}})])]));
+
+    /* ---- Automatic backup files (machines that cannot own a data file) ---- */
+    if(!FileStore.handle){
+      var every=autoBackupEvery(),lastAuto=DB.data.settings.last_auto_backup;
+      body.appendChild(el("div",{class:"card mt"},[
+        el("h3",{class:"mb",text:"⏳ Automatic backup files"}),
+        el("div",{class:"hint mb",html:every
+          ? ("A dated backup file is saved to this computer's download folder every <strong>"+every+
+             "</strong> sales and whenever the register is closed."+
+             (lastAuto?(" Last one: "+fmtDate(lastAuto)+"."):" None saved yet."))
+          : "Automatic backup files are switched off. Turn them on in <strong>Settings</strong> if this browser cannot save to a data file."}),
+        el("div",{class:"flex",style:"flex-wrap:wrap"},[
+          el("button",{class:"btn btn-primary btn-sm",text:"💾 Save one now",onClick:function(){
+            autoBackupTick(true)?toast("Backup file saved to your downloads","success")
+                                :toast("This browser blocked the download","error");}}),
+          el("button",{class:"btn btn-ghost btn-sm",text:"⚙ Change how often",onClick:function(){location.hash="#/settings";}})]),
+        el("div",{class:"hint mt",text:"Tip: set the browser to save downloads straight to a folder without asking, and point it at a folder your backup copies."})]));}
     /* ---- Restore points ---- */
     var snapCard=el("div",{class:"card mt"});
     function drawSnaps(){
@@ -3867,7 +4117,7 @@ VIEWS.users={title:function(){return t("nav.users");},render:function(root){
           {key:"act",label:"",num:true,render:function(x){return el("button",{class:"btn btn-sm btn-ghost",text:"Restore",
             onClick:function(){confirmModal("Restore everything as it was on "+fmtDate(x.at)+"? Anything done since will be lost.",function(){
               takeSnapshot("manual").then(function(){return restoreSnapshot(x.id);}).then(function(ok){
-                if(ok){toast("Restored","success");render();}else toast("Could not restore that point","error");});});}});}}
+                if(ok){toast("Restored","success");renderShell();route();}else toast("Could not restore that point","error");});});}});}}
         ],list,{empty:"No restore points yet"}));});}
     drawSnaps();body.appendChild(snapCard);
 
@@ -3930,6 +4180,11 @@ VIEWS.settings={title:function(){return t("nav.settings");},render:function(root
     {name:"autolock_minutes",label:"Lock screen after (minutes, 0 = never)",type:"number",step:"1"},
     {name:"reduce_transparency",label:"Reduce transparency (clearer / faster)",type:"select",
       options:[{value:"0",label:"Off — frosted glass"},{value:"1",label:"On — solid surfaces"}]},
+    {name:"auto_backup_every",label:"Automatic backup file every N sales (0 = off)",type:"number",step:"1"},
+    {name:"icon_mode",label:"Icons",type:"select",full:true,
+      options:[{value:"auto",label:"Automatic — emoji where this computer can show them"},
+               {value:"text",label:"Words only — for Windows XP and other machines with no emoji font"},
+               {value:"emoji",label:"Always emoji"}]},
     {name:"tax_rate",label:"Default Tax %",type:"number",step:"0.01"},
     {name:"prices_include_tax",label:"Shelf prices",type:"select",full:true,
       options:[{value:"1",label:"Include tax — customer pays the price shown (retail)"},
@@ -3948,11 +4203,16 @@ VIEWS.settings={title:function(){return t("nav.settings");},render:function(root
       v.loyalty_earn_per=parseFloat(v.loyalty_earn_per)||1;v.loyalty_point_value=parseFloat(v.loyalty_point_value)||0.01;
       v.loyalty_min_redeem=parseInt(v.loyalty_min_redeem)||0;
       v.autolock_minutes=Math.max(0,parseInt(v.autolock_minutes)||0);
+      v.auto_backup_every=Math.max(0,parseInt(v.auto_backup_every)||0);
       if(v.loyalty_point_value<0||v.loyalty_earn_per<0){toast("Loyalty values cannot be negative","error");return false;}
       var need=String(v.scale_prefix||"2").length+v.scale_plu_len+v.scale_value_len+1;
       if(String(v.scale_enabled)==="1"&&need!==13){toast("Scale layout must total 13 digits — currently "+need,"error");return false;}
       for(var k in v)s[k]=v[k];DB.save();log("update_settings","settings","");
-      LockScreen.reset();applyTransparency();toast("Settings saved","success");}})]));
+      LockScreen.reset();applyTransparency();
+      /* Switching the icon mode changes every screen, so rebuild the shell. */
+      var wasEmoji=EMOJI_OK;EMOJI_OK=detectEmojiSupport();
+      toast("Settings saved","success");
+      if(wasEmoji!==EMOJI_OK){renderShell();route();return;}}})]));
 }};
 
 /* ======================================================================
@@ -4010,7 +4270,9 @@ function renderLogin(){var root=document.getElementById("root");
     el("p",{class:"login-hint",html:"Default admin — <strong>admin / admin123</strong>"})]);
   root.appendChild(el("div",{class:"login-wrap"},card));}
 
-function renderShell(){var root=document.getElementById("root");document.body.className="";clear(root);
+function renderShell(){var root=document.getElementById("root");
+  document.body.className=EMOJI_OK?"":"no-emoji";clear(root);
+  applyLegacyLayout();
   var nav=el("nav",{class:"nav",id:"nav"});
   NAV_GROUPS.forEach(function(g){
     var visible=g.items.filter(function(i){return can(i[2]);});
@@ -4019,11 +4281,11 @@ function renderShell(){var root=document.getElementById("root");document.body.cl
     visible.forEach(function(item){
       var badge=navBadge(item[0]);
       nav.appendChild(el("a",{href:"#/"+item[0],"data-view":item[0]},
-        [el("span",{class:"nav-icon",text:item[1]}),el("span",{text:navLabel(item[0])}),
+        [EMOJI_OK?el("span",{class:"nav-icon",text:item[1]}):null,el("span",{text:navLabel(item[0])}),
          badge?el("span",{class:"nav-badge",text:badge>99?"99+":String(badge)}):null]));});});
   var u=SESSION.user;
   var sidebar=el("aside",{class:"sidebar",id:"sidebar"},[
-    el("div",{class:"brand"},[el("span",{class:"brand-icon",text:"🛒"}),
+    el("div",{class:"brand"},[EMOJI_OK?el("span",{class:"brand-icon",text:"🛒"}):null,
       el("div",{style:"min-width:0"},[el("div",{class:"brand-name",text:DB.data.settings.store_name||"KAKA POS"}),
         el("div",{class:"brand-tag",text:"Point of Sale"})])]),
     nav,
@@ -4035,7 +4297,7 @@ function renderShell(){var root=document.getElementById("root");document.body.cl
     el("a",{onClick:changePassword},[el("span",{text:"🔑"}),el("span",{text:t("menu.change_password")})]),
     el("a",{onClick:function(){logout();renderLogin();}},[el("span",{text:"↪"}),el("span",{text:t("menu.logout")})])]);
   var topbar=el("header",{class:"topbar"},[
-    el("button",{class:"icon-btn",id:"menu-toggle",text:"☰",onClick:function(e){e.stopPropagation();document.getElementById("sidebar").classList.toggle("open");}}),
+    el("button",{class:"icon-btn",id:"menu-toggle",title:"Menu",text:"☰",onClick:function(e){e.stopPropagation();document.getElementById("sidebar").classList.toggle("open");}}),
     el("div",{style:"min-width:0"},[el("h2",{id:"page-title"}),el("div",{class:"page-sub",id:"page-sub"})]),
     el("div",{class:"topbar-actions"},[
       el("button",{class:"save-chip",id:"save-chip",title:"Where your data is stored",
@@ -4043,8 +4305,9 @@ function renderShell(){var root=document.getElementById("root");document.body.cl
           var tabs=document.querySelectorAll(".view .tab");if(tabs[2])tabs[2].click();},350);}}),
       langSel,
       el("button",{class:"icon-btn",title:"Help & shortcuts",text:"❓",onClick:helpModal}),
-      el("button",{class:"icon-btn",title:"Toggle theme",text:SESSION.theme==="dark"?"☀️":"🌙",
-        onClick:function(e){var next=SESSION.theme==="light"?"dark":"light";applyTheme(next);e.currentTarget.textContent=next==="dark"?"☀️":"🌙";}}),
+      el("button",{class:"icon-btn",title:"Theme",text:SESSION.theme==="dark"?"☀️":"🌙",
+        onClick:function(e){var next=SESSION.theme==="light"?"dark":"light";applyTheme(next);
+        e.currentTarget.textContent=EMOJI_OK?(next==="dark"?"☀️":"🌙"):(next==="dark"?"Light":"Dark");}}),
       el("div",{class:"dropdown"},[el("button",{class:"icon-btn",text:"⋯",title:"Account",
         onClick:function(e){e.stopPropagation();userMenu.classList.toggle("open");}}),userMenu])])]);
   document.addEventListener("click",function(){userMenu.classList.remove("open");
@@ -4062,7 +4325,7 @@ function updateSaveChip(){
     denied:{cls:"bad",txt:"⚠ Reconnect file",title:"Permission to write the data file was lost. Click to reconnect."},
     error:{cls:"bad",txt:"⚠ Not saved",title:FileStore.lastError||"Could not write the data file"}};
   var m=map[st]||map.off;
-  chip.className="save-chip "+m.cls;chip.textContent=m.txt;chip.title=m.title;}
+  chip.className="save-chip "+m.cls;setText(chip,m.txt);chip.title=m.title;}
 
 /* In-app help — a cashier should never need to find a manual. */
 function helpModal(){
@@ -4230,7 +4493,7 @@ var LockScreen={
 /* Reconnect to the data file (if any) before the first render, so the app
    starts from what is on disk rather than the browser mirror. */
 function start(){
-  if(!FileStore.supported()){DB.load();boot();return;}
+  if(!FileStore.supported()){DB.load();EMOJI_OK=detectEmojiSupport();boot();return;}
   FileStore.restore().then(function(ok){
     if(!ok)return null;
     return FileStore.read();
@@ -4240,8 +4503,9 @@ function start(){
       try{localStorage.setItem(STORE_KEY,JSON.stringify(DB.data));}catch(e){}
       FileStore.setStatus("saved");
     }else{DB.load();}
+    EMOJI_OK=detectEmojiSupport();
     boot();
-  }).catch(function(){DB.load();boot();});}
+  }).catch(function(){DB.load();EMOJI_OK=detectEmojiSupport();boot();});}
 
 /* Never leave a queued write unfinished. */
 window.addEventListener("beforeunload",function(e){
