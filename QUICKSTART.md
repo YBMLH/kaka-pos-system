@@ -167,7 +167,21 @@ The app is built to survive a bad day.
 
 ---
 
-## 9. Need a reminder?
+## 9. Scanner typing strange symbols?
+
+If a scan comes out as `-&&&ààààà&ààà` instead of numbers, the scanner is
+typing on a US keyboard while the computer is set to French or Arabic. **The
+app understands it anyway** — items still ring up correctly.
+
+To fix it properly, set the scanner to the same keyboard layout as the
+computer; its manual has a barcode you scan once to do that.
+
+**Settings → 🔎 Test the barcode scanner** shows exactly what the scanner sent
+and what the app read, so you can check in five seconds.
+
+---
+
+## 10. Need a reminder?
 
 Press the **❓** button at the top of the screen at any time — shortcuts and
 short how-tos are built in.

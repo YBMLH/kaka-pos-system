@@ -1648,12 +1648,54 @@ function shrinkageTotal(filterFn){var t=0;(DB.data.writeoffs||[]).forEach(functi
 
 /* ---------- Product search --------------------------------------------- */
 /* Resolve any scanned code: piece barcode, case barcode, or SKU. */
-function findByBarcode(code){code=(code||"").trim();if(!code)return null;
+/* ---- Scanners and keyboard layouts -------------------------------------
+   A barcode scanner is a keyboard that types very fast, and it types as if
+   the computer were set to a US layout. On a French (AZERTY) or Arabic
+   keyboard the digit row lands somewhere else entirely, so scanning
+   6111234567890 arrives as "\u00e8___\u00e0\u00e9..." — the right code, the wrong
+   characters. Translate it back before anything tries to read it.
+   The translation only runs when the whole thing looks like a scanned code,
+   so a search for "Coca-Cola" or "L'Or\u00e9al" is never touched. */
+var LAYOUT_DIGITS={
+  /* French / Belgian AZERTY digit row, unshifted */
+  "&":"1","\u00e9":"2","\"":"3","'":"4","(":"5","-":"6","\u00e8":"7","_":"8","\u00e7":"9","\u00e0":"0",
+  /* Variants seen on Belgian and Swiss boards */
+  "\u00a7":"6","!":"8","\u00b0":"0","\u00a3":"3",
+  /* Arabic-Indic and Persian digits, in case the scanner emits them */
+  "\u0660":"0","\u0661":"1","\u0662":"2","\u0663":"3","\u0664":"4",
+  "\u0665":"5","\u0666":"6","\u0667":"7","\u0668":"8","\u0669":"9",
+  "\u06f0":"0","\u06f1":"1","\u06f2":"2","\u06f3":"3","\u06f4":"4",
+  "\u06f5":"5","\u06f6":"6","\u06f7":"7","\u06f8":"8","\u06f9":"9"};
+function isScanChar(c){return (c>="0"&&c<="9")||LAYOUT_DIGITS[c]!==undefined;}
+/* True when every character could have come from a scanner reading digits. */
+function looksScanned(v){
+  v=(v||"").trim();
+  if(v.length<6||v.length>18)return false;
+  for(var i=0;i<v.length;i++)if(!isScanChar(v.charAt(i)))return false;
+  return true;}
+function scanDigits(v){
+  v=(v||"").trim();
+  if(!looksScanned(v))return v;
+  var out="";
+  for(var i=0;i<v.length;i++){var c=v.charAt(i);
+    out+=(c>="0"&&c<="9")?c:LAYOUT_DIGITS[c];}
+  return out;}
+
+function lookupBarcode(code){
   var p=DB.data.products.filter(function(x){return!x.archived&&x.barcode===code;})[0];
   if(p)return{product:p,isBox:false};
   p=DB.data.products.filter(function(x){return!x.archived&&x.box_barcode&&x.box_barcode===code;})[0];
   if(p)return{product:p,isBox:true};
   return null;}
+/* What was typed always wins: a code that really does contain a dash still
+   matches itself, and only a code that matches nothing is retried as a
+   mistyped scan. */
+function findByBarcode(code){
+  code=(code||"").trim();if(!code)return null;
+  var hit=lookupBarcode(code);
+  if(hit)return hit;
+  var fixed=scanDigits(code);
+  return fixed!==code?lookupBarcode(fixed):null;}
 function searchProducts(term,limit){limit=limit||15;term=(term||"").trim();if(!term)return{products:[]};
   var hit=findByBarcode(term);
   if(hit)return{products:[hit.product],exact_barcode:true,isBox:hit.isBox};
@@ -1913,7 +1955,12 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
     else if(e.key==="ArrowDown"){activeIdx=Math.min(activeIdx+1,results.length-1);hl();}
     else if(e.key==="ArrowUp"){activeIdx=Math.max(activeIdx-1,0);hl();}else if(e.key==="Escape")resetSearch();});
   function hl(){var items=suggest.querySelectorAll(".pos-suggest-item");for(var i=0;i<items.length;i++)items[i].style.background=i===activeIdx?"var(--primary)":"";}
-  function doSearch(q,scanned){if(!q)return;
+  function doSearch(q,scanned){
+    if(!q)return;
+    /* A scan on a French or Arabic keyboard arrives as symbols; put the
+       digits back, and show the corrected code in the box too. */
+    var fixed=scanDigits(q);
+    if(fixed!==q&&!lookupBarcode(q)){q=fixed;searchInput.value=fixed;}
     /* A real product barcode always wins. Only codes that match no product are
        tried as scale labels, so a genuine EAN-13 that happens to start with the
        scale prefix still scans normally. */
@@ -2549,7 +2596,7 @@ function writeOffModal(product,onDone){
    screen. Quantity can be entered in units or in boxes × units-per-box, which
    is how stock actually arrives from a supplier. */
 var UNITS=["pcs","box","pack","kg","g","L","ml","m"];
-function isBarcodeLike(s){return /^[0-9]{6,14}$/.test((s||"").trim());}
+function isBarcodeLike(s){return /^[0-9]{6,14}$/.test(scanDigits((s||"").trim()));}
 
 /* Tax is entirely optional — many markets (Algeria, for one) do not charge it
    at the till at all. When it is off, no tax is ever calculated, shown or
@@ -4195,7 +4242,8 @@ VIEWS.settings={title:function(){return t("nav.settings");},render:function(root
     el("div",{class:"flex mt",style:"flex-wrap:wrap"},[
       el("button",{class:"btn btn-ghost btn-sm",text:"🧭 Re-run setup wizard",onClick:function(){
         setupWizard(function(){render();});}}),
-      el("button",{class:"btn btn-ghost btn-sm",text:"❓ Help & shortcuts",onClick:helpModal})]),
+      el("button",{class:"btn btn-ghost btn-sm",text:"❓ Help & shortcuts",onClick:helpModal}),
+      el("button",{class:"btn btn-ghost btn-sm",text:"🔎 Test the barcode scanner",onClick:scannerCheck})]),
     el("button",{class:"btn btn-primary mt",text:t("common.save"),onClick:function(){var v=form.values();
       if(v.tax_rate!==undefined)v.tax_rate=parseFloat(v.tax_rate)||0;v.zakat_rate=parseFloat(v.zakat_rate)||2.5;v.receipt_width=parseInt(v.receipt_width)||80;
       v.scale_plu_len=parseInt(v.scale_plu_len)||5;v.scale_value_len=parseInt(v.scale_value_len)||5;
@@ -4327,6 +4375,48 @@ function updateSaveChip(){
   var m=map[st]||map.off;
   chip.className="save-chip "+m.cls;setText(chip,m.txt);chip.title=m.title;}
 
+/* Scan an item here to see exactly what the scanner sent and what the app
+   made of it. This is the fastest way to spot a keyboard-layout mismatch,
+   which turns every digit into a symbol. */
+function scannerCheck(){
+  var inp=el("input",{placeholder:"Scan any barcode now…",autocomplete:"off",
+    style:"font-size:18px;letter-spacing:1px"});
+  var out=el("div",{});
+  var last="";
+  function verdict(raw){
+    clear(out);
+    if(!raw){out.appendChild(el("div",{class:"hint",text:"Waiting for a scan…"}));return;}
+    var fixed=scanDigits(raw);
+    var hit=findByBarcode(fixed);
+    var rows=[["What the scanner typed",raw],
+      ["Characters",String(raw.length)],
+      ["Read as",fixed],
+      ["Looks like a barcode",isBarcodeLike(fixed)?"yes":"no"],
+      ["Matches a product",hit?((hit.product.name_en||hit.product.name_ar)+(hit.isBox?" (case barcode)":"")):"no product with this code"]];
+    out.appendChild(table([{key:"k",label:"Check"},{key:"v",label:"Result"}],
+      rows.map(function(r){return{k:r[0],v:r[1]};})));
+    if(fixed!==raw)
+      out.appendChild(el("div",{class:"banner mt",
+        html:"Your keyboard layout is not the one the scanner expects — it typed <strong>"+esc(raw)+
+             "</strong> where it meant <strong>"+esc(fixed)+"</strong>. The app corrects this automatically, "+
+             "so you can keep working. To fix it properly, set the scanner to the same keyboard layout as this computer "+
+             "(its manual has a barcode for that)."}));
+    else if(!isBarcodeLike(fixed))
+      out.appendChild(el("div",{class:"banner banner-warn mt",
+        text:"That does not look like a plain barcode. If the scanner adds a prefix or suffix, turn that off in its settings."}));
+    else if(!hit)
+      out.appendChild(el("div",{class:"banner mt",
+        text:"The code was read cleanly. It just is not in the system yet — scan it at the till and the app will offer to add it."}));
+    else out.appendChild(el("div",{class:"banner mt",text:"All good — the scanner and this computer agree."}));}
+  inp.addEventListener("keydown",function(e){
+    if(e.key==="Enter"){e.preventDefault();last=inp.value;verdict(last);inp.value="";inp.focus();}});
+  inp.addEventListener("input",function(){if(inp.value.length>=6)verdict(inp.value);});
+  verdict("");
+  modal("🔎 Scanner check",el("div",{},[
+    el("p",{class:"hint mb",text:"Point the scanner at any product and pull the trigger. Nothing is sold or changed here."}),
+    inp,el("div",{class:"mt"},out)]),null,{large:true});
+  setTimeout(function(){inp.focus();},80);}
+
 /* In-app help — a cashier should never need to find a manual. */
 function helpModal(){
   function row(k,v){return el("div",{class:"list-row"},[el("span",{text:v}),el("kbd",{text:k})]);}
@@ -4337,6 +4427,7 @@ function helpModal(){
     sec("Selling",[
       el("div",{class:"hint mb",text:"Scan a barcode, or type part of the name — accents, spelling slips and Arabic all work. Scan a carton barcode to sell a whole case. Scale labels add the exact weight."}),
       el("div",{class:"hint mb",text:"You can scan from any screen: the app jumps to the till and drops the item in the basket. Your basket is kept while you look at other screens."}),
+      el("div",{class:"hint mb",text:"Scanner typing strange symbols instead of numbers? Settings → Test the barcode scanner will tell you what is wrong. The app corrects it either way."}),
       el("div",{class:"hint mb",text:"No barcode on the item? Use ＋ Custom Item. Not in the system at all? Scan it and the app offers to add it on the spot."})]),
     sec("Fixing mistakes",[
       el("div",{class:"hint mb",text:"Sales History → ↶ undoes a whole sale and puts the stock back. ↩️ refunds part of one. Damaged goods can be written off instead of restocked."})]),
@@ -4389,9 +4480,11 @@ var GlobalScan={buf:"",last:0,MIN:4,GAP:140,
       var code=GlobalScan.buf;GlobalScan.buf="";
       if(code.length>=GlobalScan.MIN){e.preventDefault();GlobalScan.fire(code);}
       return;}
-    if(e.key.length===1&&/[0-9A-Za-z]/.test(e.key)){GlobalScan.buf+=e.key;return;}
+    if(e.key.length===1&&(/[0-9A-Za-z]/.test(e.key)||LAYOUT_DIGITS[e.key]!==undefined)){
+      GlobalScan.buf+=e.key;return;}
     GlobalScan.buf="";},
   fire:function(code){
+    code=scanDigits(code);
     if(location.hash==="#/pos"&&window._posScan){window._posScan(code);return;}
     /* Not on the till: remember the code, switch, and the POS picks it up. */
     window._pendingScan=code;

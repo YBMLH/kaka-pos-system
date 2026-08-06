@@ -104,6 +104,12 @@ loads it back on any machine.
   money without touching profit; a supplier paid in cash or a till expense also
   creates an expense record. Closing the register and the Z-report both count
   these movements.
+- **Keyboard layouts.** A scanner types as though the computer were set to a
+  US keyboard, so on an AZERTY or Arabic layout every digit arrives as a
+  symbol. Codes that match nothing are retried through a layout translation
+  before being given up on, so scanning works either way — and a code that
+  genuinely contains a dash still matches itself first. **Settings → Test the
+  barcode scanner** reports what was sent versus what was read.
 - **Old machines are handled.** The app checks what the browser can actually
   do and adapts: no emoji font (Windows 7 and earlier) switches every icon to
   plain words and shows a product's initial instead of a picture; no
