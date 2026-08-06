@@ -72,7 +72,7 @@ loads it back on any machine.
 | **Inventory** | Real-time stock, alerts, expiry watch (FEFO), write-offs valued at cost, movement ledger, stocktake with variance. |
 | **Purchasing** | Purchase orders by piece or case, partial receiving, automatic reordering by supplier, returns to supplier. |
 | **People** | Suppliers with balances and payments; customers with credit, purchase history and loyalty points. |
-| **Money** | Expenses, cash register open/close with counting, Z-report day-end close, Zakat calculator. |
+| **Money** | Expenses, cash register open/close with counting, cash in/out of the drawer (owner withdrawals, suppliers paid at the door, till expenses), Z-report day-end close, Zakat calculator. |
 | **Reports** | Sales, inventory, financial (incl. stock losses), supplier, customer and employee reports with CSV export. |
 | **Admin** | Four roles with enforced permissions, audit log, backup/restore, store settings. |
 
@@ -89,6 +89,15 @@ loads it back on any machine.
 - **Mistakes are recoverable.** Void a sale to restore stock and reverse credit,
   loyalty and revenue — the record stays for audit. Damaged goods can be written
   off at cost instead of restocked.
+- **Scan from anywhere.** A scanner is just a fast keyboard, so a scan made on
+  any screen jumps to the till and adds the item to the basket. Typing into a
+  field, an open dialog and the lock screen are never intercepted, and the
+  basket survives moving between screens.
+- **The drawer is a ledger.** Cash that leaves or enters the till without being
+  a sale is recorded with its reason and who did it. An owner withdrawal moves
+  money without touching profit; a supplier paid in cash or a till expense also
+  creates an expense record. Closing the register and the Z-report both count
+  these movements.
 - **Tax is optional.** New shops start with **no tax** — the price on the shelf
   is exactly what the customer pays, and no tax line appears on screen, on the
   receipt or in the reports. Shops that do charge it turn it on in

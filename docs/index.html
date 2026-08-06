@@ -721,9 +721,14 @@ var CART_KEY="kaka_active_cart";     /* survives a crash mid-sale */
 /* ---------- Crash safety -----------------------------------------------
    A till loses power, a browser is closed by mistake, a tab crashes. The
    basket is kept outside the page so the sale can be picked up again. */
+/* True once this page has written a basket: a basket saved by the tab we are
+   still in was merely navigated away from, not lost, so it comes back silently
+   instead of asking. Only a basket left by an earlier page load is a crash. */
+var CART_LIVE=false;
 function saveActiveCart(state){
   try{
     if(!state||!state.cart||!state.cart.length){localStorage.removeItem(CART_KEY);return;}
+    CART_LIVE=true;
     localStorage.setItem(CART_KEY,JSON.stringify({
       cart:state.cart,discount:state.discount,discount_pct:state.discount_pct,
       customer_id:state.customer_id,user:SESSION.user?SESSION.user.username:"",
@@ -931,6 +936,7 @@ var DB={
       def(it,"pack_units",1);def(it,"pack_label","");});});
     (d.movements||[]).forEach(function(m){def(m,"loss_value",0);});
     def(d,"writeoffs",[]);def(d,"_held",[]);def(d,"purchase_returns",[]);def(d,"stocktakes",[]);
+    def(d,"cash_moves",[]);
     (d.products||[]).forEach(function(p){def(p,"plu","");});
     var sd=d.settings||{};
     def(sd,"scale_enabled","1");def(sd,"scale_prefix","2");def(sd,"scale_plu_len",6);
@@ -1018,7 +1024,7 @@ var DB={
         {id:2,company_name:"Nord Food Supply",contact_person:"",category:"Dairy",phone1:"0522220022",whatsapp:"",email:"nord@example.com",city:"",country:"",tax_number:"",address:"",notes:"",balance:0,active:1},
         {id:3,company_name:"TechnoPro Import",contact_person:"",category:"Electronics",phone1:"0522330033",whatsapp:"",email:"techno@example.com",city:"",country:"",tax_number:"",address:"",notes:"",balance:0,active:1}],
       customers:[],products:[],sales:[],purchases:[],expenses:[],movements:[],registers:[],
-      activity:[],counters:{sale:0,purchase:0}};
+      cash_moves:[],activity:[],counters:{sale:0,purchase:0}};
     d._seedMovements=true;
     cats.forEach(function(c,i){d.categories.push({id:i+1,name:c,name_ar:"",name_fr:""});});
     brands.forEach(function(b,i){d.brands.push({id:i+1,name:b});});
@@ -1100,7 +1106,7 @@ function usingDefaultAdminPassword(){
 function wipeBusinessData(){
   var d=DB.data;
   d.products=[];d.sales=[];d.customers=[];d.suppliers=[];d.purchases=[];
-  d.purchase_returns=[];d.expenses=[];d.movements=[];d.writeoffs=[];
+  d.purchase_returns=[];d.expenses=[];d.movements=[];d.writeoffs=[];d.cash_moves=[];
   d.registers=[];d.stocktakes=[];d.activity=[];d._held=[];
   d.counters={sale:0,purchase:0};}
 function setupWizard(onDone){
@@ -1612,6 +1618,17 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
   (function(){
     var saved=pendingRestore;
     if(!saved)return;
+    function restore(){
+      state.cart=saved.cart.map(function(l){
+        if(l.product_id!=null){var p=DB.data.products.filter(function(x){return x.id===l.product_id;})[0];
+          l.stock=p?p.quantity:0;}else l.stock=Infinity;return l;});
+      state.discount=saved.discount||0;state.discount_pct=!!saved.discount_pct;
+      state.customer_id=saved.customer_id||null;
+      var c=state.customer_id?DB.data.customers.filter(function(x){return x.id===state.customer_id;})[0]:null;
+      custLabel.textContent=c?c.name:t("pos.walk_in");
+      renderCart();}
+    /* Came back to the till within the same session — just carry on. */
+    if(CART_LIVE){restore();return;}
     var count=saved.cart.reduce(function(n,l){return n+l.quantity;},0);
     modal("↻ Unfinished sale found",el("div",{},[
       el("p",{class:"mb",text:"A sale was in progress when the app last closed."}),
@@ -1621,14 +1638,12 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
       el("p",{class:"hint",text:"Restore it, or discard it and start fresh."})]),
       [{label:"Discard",class:"btn-ghost",onClick:function(){clearActiveCart();}},
        {label:"Restore sale",class:"btn-primary",onClick:function(){
-         state.cart=saved.cart.map(function(l){
-           if(l.product_id!=null){var p=DB.data.products.filter(function(x){return x.id===l.product_id;})[0];
-             l.stock=p?p.quantity:0;}else l.stock=Infinity;return l;});
-         state.discount=saved.discount||0;state.discount_pct=!!saved.discount_pct;
-         state.customer_id=saved.customer_id||null;
-         var c=state.customer_id?DB.data.customers.filter(function(x){return x.id===state.customer_id;})[0]:null;
-         custLabel.textContent=c?c.name:t("pos.walk_in");
-         renderCart();toast("Sale restored","success");}}]);})();
+         restore();toast("Sale restored","success");}}]);})();
+  /* A scan made anywhere else in the app arrives here already read; treat it
+     exactly like one typed into the search box. */
+  window._posScan=function(code){searchInput.value=code;doSearch(code,true);searchInput.focus();};
+  if(window._pendingScan){var pendingCode=window._pendingScan;window._pendingScan=null;
+    setTimeout(function(){window._posScan(pendingCode);},0);}
   // Keyboard: F2 focuses search, F4 opens payment — only while POS is on screen.
   if(window._posKey)document.removeEventListener("keydown",window._posKey);
   window._posKey=function(e){if(document.getElementById("pos-search")!==searchInput)return;
@@ -3208,7 +3223,53 @@ VIEWS.purchases={title:function(){return t("nav.purchases");},render:function(ro
 function statusColor(s){return{received:"green",partial:"orange",draft:"gray",ordered:"blue",cancelled:"red"}[s]||"gray";}
 
 /* ---- Expenses / Register / Zakat ---- */
-var EXP_CATS=["Rent","Electricity","Water","Gas","Internet","Salaries","Fuel","Maintenance","Supplies","Miscellaneous"];
+var EXP_CATS=["Rent","Electricity","Water","Gas","Internet","Salaries","Fuel","Transport",
+  "Restocking","Maintenance","Supplies","Miscellaneous"];
+
+/* ---- Cash drawer movements ------------------------------------------------
+   Money leaves and enters the drawer for reasons that are not sales: the owner
+   takes cash out, a supplier is paid in cash at the door, a small expense is
+   paid from the till, change is added in the morning. Every one is recorded so
+   the counted drawer at closing time can be reconciled honestly.
+   An owner withdrawal is NOT an expense — it moves money, it does not consume
+   it — so it never touches profit. Expenses paid from the drawer create a
+   normal expense record as well as the cash movement. */
+var CASH_REASONS=[
+  {key:"withdrawal",label:"Owner withdrawal",dir:"out",expense:false},
+  {key:"supplier",label:"Supplier / restock paid in cash",dir:"out",expense:true,cat:"Restocking"},
+  {key:"expense",label:"Expense paid from the till",dir:"out",expense:true,cat:"Miscellaneous"},
+  {key:"bank",label:"Money taken to the bank",dir:"out",expense:false},
+  {key:"float",label:"Change / float added",dir:"in",expense:false},
+  {key:"other_in",label:"Other money in",dir:"in",expense:false},
+  {key:"other_out",label:"Other money out",dir:"out",expense:false}];
+function cashReason(key){return CASH_REASONS.filter(function(r){return r.key===key;})[0]||CASH_REASONS[0];}
+function cashMoves(filterFn){return (DB.data.cash_moves||[]).filter(filterFn||function(){return true;});}
+/* Net effect on the drawer of everything that is not a sale. */
+function drawerAdjustment(filterFn){var n=0;
+  cashMoves(filterFn).forEach(function(m){n+=(m.direction==="in"?1:-1)*(m.amount||0);});
+  return round2(n);}
+function addCashMove(v){
+  var move={id:DB.nextId("cash_moves"),register_id:v.register_id||null,direction:v.direction,
+    amount:round2(v.amount),reason:v.reason,label:v.label,note:v.note||"",expense_id:null,
+    user:SESSION.user.username,created_at:new Date().toISOString()};
+  /* Money spent on the business is also an expense; money the owner takes out
+     is not, so profit stays truthful either way. */
+  if(v.as_expense){
+    var e={id:DB.nextId("expenses"),category:v.category||"Miscellaneous",amount:move.amount,
+      spent_on:today(),note:(v.note?v.note+" — ":"")+"paid in cash from the till",
+      user:SESSION.user.username,from_drawer:true};
+    DB.data.expenses.unshift(e);move.expense_id=e.id;}
+  DB.data.cash_moves=DB.data.cash_moves||[];
+  DB.data.cash_moves.unshift(move);
+  DB.save();log("cash_"+move.direction,"register",move.label+" "+move.amount);
+  return move;}
+function removeCashMove(id){
+  var m=(DB.data.cash_moves||[]).filter(function(x){return x.id===id;})[0];
+  if(!m)return;
+  if(m.expense_id)DB.data.expenses=DB.data.expenses.filter(function(e){return e.id!==m.expense_id;});
+  DB.data.cash_moves=DB.data.cash_moves.filter(function(x){return x.id!==id;});
+  DB.save();log("cash_undo","register",m.label+" "+m.amount);}
+
 VIEWS.expenses={title:function(){return t("nav.expenses");},render:function(root){
   clear(root);var filter=el("select",{style:"width:auto"},[el("option",{value:""},t("common.all"))].concat(EXP_CATS.map(function(c){return el("option",{value:c},c);})));
   var holder=el("div",{});root.appendChild(el("div",{class:"toolbar"},[filter,el("span",{class:"spacer"}),
@@ -3240,17 +3301,110 @@ VIEWS.register={title:function(){return t("nav.register");},render:function(root
         DB.data.registers.unshift({id:DB.nextId("registers"),user:SESSION.user.username,opening_cash:parseFloat(opening.value)||0,
           closing_cash:null,counted_cash:null,expected_cash:null,difference:null,status:"open",opened_at:new Date().toISOString(),closed_at:null});
         DB.save();log("open_register","register","");VIEWS.register.render(root);}})]));}
-  else{var cashSales=0;DB.data.sales.forEach(function(s){if(s.status==="completed"&&(s.payment_method==="cash"||s.payment_method==="mixed")&&new Date(s.created_at)>=new Date(open.opened_at))cashSales+=s.total;});
-    var expected=open.opening_cash+cashSales;var counted=el("input",{type:"number",step:"0.01",value:expected.toFixed(2)});
+  else{var cashSales=cashSalesSince(open);
+    /* Cash taken out of, or put into, the drawer since it was opened. */
+    var mine=function(m){return m.register_id===open.id;};
+    var paidIn=0,paidOut=0;
+    cashMoves(mine).forEach(function(m){if(m.direction==="in")paidIn+=m.amount;else paidOut+=m.amount;});
+    var expected=drawerNow(open);
+    var counted=el("input",{type:"number",step:"0.01",value:expected.toFixed(2)});
     var diffEl=el("strong",{text:money(0)});counted.addEventListener("input",function(){var diff=(parseFloat(counted.value)||0)-expected;
       diffEl.textContent=money(diff);diffEl.className=diff===0?"":(diff>0?"up":"down");});
     root.appendChild(el("div",{class:"grid stats-grid mb"},[statCard("Opening Cash",money(open.opening_cash),"","blue"),
-      statCard("Cash Sales",money(cashSales),"","green"),statCard("Expected in Drawer",money(expected),"","orange")]));
-    root.appendChild(el("div",{class:"card",style:"max-width:460px"},[el("h3",{class:"mb",text:"Close Register (Cash Count)"}),
+      statCard("Cash Sales",money(cashSales),"","green"),
+      statCard("Cash In / Out",money(paidIn)+" / "+money(paidOut),paidOut?"taken out of the drawer":"","orange","💸"),
+      statCard("Expected in Drawer",money(expected),"","orange")]));
+    root.appendChild(drawerCard(open));
+    root.appendChild(el("div",{class:"card mt",style:"max-width:460px"},[el("h3",{class:"mb",text:"Close Register (Cash Count)"}),
       el("div",{class:"field mb"},[el("label",{text:"Counted Cash"}),counted]),el("div",{class:"flex mb",style:"justify-content:space-between"},[el("span",{text:"Difference"}),diffEl]),
       el("button",{class:"btn btn-danger btn-block",text:"Close Register",onClick:function(){var c=parseFloat(counted.value)||0;var diff=Math.round((c-expected)*100)/100;
         open.status="closed";open.counted_cash=c;open.closing_cash=c;open.expected_cash=Math.round(expected*100)/100;open.difference=diff;open.closed_at=new Date().toISOString();
         DB.save();log("close_register","register","difference="+diff);toast("Closed. Difference: "+money(diff),diff===0?"success":"error");VIEWS.register.render(root);}})]));}
+  if(!open)root.appendChild(drawerCard(null));
+
+  function cashSalesSince(reg){var n=0;
+    DB.data.sales.forEach(function(s){if(s.status==="completed"&&(s.payment_method==="cash"||s.payment_method==="mixed")&&
+      new Date(s.created_at)>=new Date(reg.opened_at))n+=s.total;});
+    return round2(n);}
+  /* What should physically be in the drawer right now. */
+  function drawerNow(reg){if(!reg)return null;
+    var adj=drawerAdjustment(function(m){return m.register_id===reg.id;});
+    return round2(reg.opening_cash+cashSalesSince(reg)+adj);}
+
+  /* ---- Money in and out of the drawer -----------------------------------
+     Everything here is money that is not a sale: the owner taking their cut,
+     a supplier paid at the door, a bulb bought for the shop, change added in
+     the morning. */
+  function drawerCard(reg){
+    var card=el("div",{class:"card mt"});
+    function draw(){clear(card);
+      var list=cashMoves(function(m){return reg?m.register_id===reg.id:dnorm(m.created_at)===today();});
+      card.appendChild(el("div",{class:"section-head"},[
+        el("h3",{text:"💸 Cash in & out of the drawer"}),
+        el("div",{class:"flex",style:"flex-wrap:wrap"},[
+          el("button",{class:"btn btn-ghost btn-sm",text:"＋ Put cash in",onClick:function(){moveModal("in");}}),
+          el("button",{class:"btn btn-primary btn-sm",text:"− Take cash out",onClick:function(){moveModal("out");}})])]));
+      card.appendChild(el("div",{class:"hint mb",
+        text:reg?"Anything you add or remove here is counted when you close the register.":
+                 "No register is open — these are still recorded against today."}));
+      if(!list.length){card.appendChild(el("div",{class:"empty",text:"Nothing taken out or put in yet"}));return;}
+      card.appendChild(table([
+        {key:"created_at",label:"Time",render:function(r){return fmtDate(r.created_at);}},
+        {key:"label",label:"Reason",render:function(r){return badge(r.label,r.direction==="in"?"green":"orange");}},
+        {key:"note",label:"Note"},
+        {key:"user",label:"By"},
+        {key:"amount",label:"Amount",num:true,render:function(r){
+          return "<span class='"+(r.direction==="in"?"up":"down")+"'>"+(r.direction==="in"?"+":"−")+esc(money(r.amount))+"</span>"+
+            (r.expense_id?" <span class='muted' style='font-size:11px'>· expense</span>":"");}},
+        {key:"act",label:"",num:true,render:function(r){
+          return can("expenses")?iconAction("🗑","Undo this movement",function(){
+            confirmModal("Remove this cash movement? The drawer goes back to what it was.",function(){
+              removeCashMove(r.id);toast("Removed","success");VIEWS.register.render(root);});}):"";}}],
+        list,{empty:"Nothing yet"}));}
+    /* One dialog for both directions: pick a reason, type the amount, done. */
+    function moveModal(dir){
+      var reasons=CASH_REASONS.filter(function(r){return r.dir===dir;});
+      var reasonSel=el("select",{},reasons.map(function(r){return el("option",{value:r.key},r.label);}));
+      var amountInp=el("input",{type:"number",step:"0.01",min:"0",placeholder:"0.00"});
+      var noteInp=el("input",{placeholder:dir==="out"?"e.g. paid Atlas Distribution":"optional"});
+      var expChk=el("input",{type:"checkbox"});
+      var catSel=el("select",{},EXP_CATS.map(function(c){return el("option",{value:c},c);}));
+      var expRow=el("div",{class:"field full"},[
+        el("label",{class:"flex",style:"gap:8px;align-items:center"},[expChk,el("span",{text:"Also record it as a business expense"})]),
+        catSel,
+        el("div",{class:"hint",text:"Leave this off for money the owner takes for themselves — that is not an expense. Leave it off too if the goods were received on a purchase order, or the cost would be counted twice."})]);
+      function syncReason(){var r=cashReason(reasonSel.value);
+        expChk.checked=!!r.expense;catSel.value=r.cat||"Miscellaneous";syncExp();}
+      function syncExp(){catSel.style.display=expChk.checked?"":"none";}
+      reasonSel.addEventListener("change",syncReason);
+      expChk.addEventListener("change",syncExp);
+      syncReason();
+      var now=drawerNow(reg);
+      var body=el("div",{},[
+        now!=null?el("div",{class:"banner mb",html:"In the drawer now: <strong>"+esc(money(now))+"</strong>"}):null,
+        el("div",{class:"form-grid"},[
+        el("div",{class:"field full"},[el("label",{text:"Reason"}),reasonSel]),
+        el("div",{class:"field"},[el("label",{text:"Amount"}),amountInp]),
+        el("div",{class:"field"},[el("label",{text:"Note"}),noteInp]),
+        expRow])]);
+      modal(dir==="out"?"− Take cash out of the drawer":"＋ Put cash in the drawer",body,
+        [{label:t("common.cancel"),class:"btn-ghost"},
+         {label:dir==="out"?"Take out":"Put in",class:dir==="out"?"btn-danger":"btn-primary",onClick:function(){
+           var amt=parseFloat(amountInp.value)||0;
+           if(!(amt>0)){toast("Type an amount greater than zero","error");amountInp.focus();return false;}
+           var r=cashReason(reasonSel.value);
+           function commit(){
+             addCashMove({register_id:reg?reg.id:null,direction:dir,amount:amt,reason:r.key,label:r.label,
+               note:(noteInp.value||"").trim(),as_expense:expChk.checked,category:catSel.value});
+             toast((dir==="out"?"Taken out: ":"Put in: ")+money(amt),"success");
+             VIEWS.register.render(root);}
+           /* Taking out more than the till should hold is usually a typo. */
+           if(dir==="out"&&now!=null&&amt>now){
+             confirmModal("The drawer should only hold "+money(now)+". Take out "+money(amt)+" anyway?",commit);
+             return;}
+           commit();}}]);
+      setTimeout(function(){amountInp.focus();},60);}
+    draw();return card;}
   /* Day-end Z-report */
   var z=zReportData(today());
   var zCard=el("div",{class:"card mt"},[
@@ -3259,7 +3413,7 @@ VIEWS.register={title:function(){return t("nav.register");},render:function(root
     el("div",{class:"grid stats-grid mb"},[
       statCard("Transactions",num(z.count),z.voided?(z.voided+" voided"):"","blue","🧾"),
       statCard("Gross sales",money(z.gross),z.tax?("Tax "+money(z.tax)):"","green","💵"),
-      statCard("Cash expected",money(z.cashSales),"cash + mixed","orange","💰"),
+      statCard("Cash expected",money(z.cashDrawer),z.cashOut?("cash sales − "+money(z.cashOut)+" taken out"):"cash + mixed","orange","💰"),
       statCard("Net profit",money(z.net),"after expenses & losses","green","📈")]),
     table([{key:"k",label:"Line"},{key:"v",label:"Amount",num:true}],
       [["Gross sales",money(z.gross)],["Discounts given",money(z.discount)],["Refunds",money(z.refunded)],
@@ -3298,9 +3452,17 @@ function zReportData(dayISO,registerId){
   var topList=Object.keys(top).map(function(k){return top[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,10);
   var regs=DB.data.registers.filter(function(r){return dnorm(r.opened_at)===day;});
   var cashSales=(byMethod.cash||0)+(byMethod.mixed||0);
+  /* Cash that moved for reasons other than a sale, so the drawer figure on the
+     report matches what is physically in the till. */
+  var moves=cashMoves(function(m){return dnorm(m.created_at)===day&&
+    (registerId==null||m.register_id===registerId);});
+  var cashIn=0,cashOut=0;
+  moves.forEach(function(m){if(m.direction==="in")cashIn+=m.amount;else cashOut+=m.amount;});
   return{day:day,count:live.length,voided:voided.length,gross:round2(gross),tax:round2(tax),
     discount:round2(disc),cost:round2(cost),profit:round2(profit),items:round2(items),
     refunded:round2(refunded),byMethod:byMethod,cashSales:round2(cashSales),
+    cashIn:round2(cashIn),cashOut:round2(cashOut),cashMoves:moves,
+    cashDrawer:round2(cashSales+cashIn-cashOut),
     expenses:round2(expTotal),expenseList:expenses,losses:round2(lossTotal),lossList:losses,
     net:round2(profit-expTotal-lossTotal),top:topList,registers:regs};}
 function round2(n){return Math.round((n||0)*100)/100;}
@@ -3324,7 +3486,10 @@ function printZReport(z){
     row("Gross sales",money(z.gross))+row("Discounts",money(z.discount))+
     (z.tax?row("Tax collected",money(z.tax)):"")+row("Refunds",money(z.refunded))+
     row("Voided sales",String(z.voided))+
-    "</table><h2>PAYMENTS</h2><table>"+methods+row("Cash expected in drawer",money(z.cashSales),true)+"</table>"+
+    "</table><h2>PAYMENTS</h2><table>"+methods+
+    (z.cashIn?row("Cash put in",money(z.cashIn)):"")+
+    (z.cashOut?row("Cash taken out",money(z.cashOut)):"")+
+    row("Cash expected in drawer",money(z.cashDrawer),true)+"</table>"+
     (regRows?("<h2>REGISTERS</h2><table>"+regRows+"</table>"):"")+
     "<h2>PROFIT</h2><table>"+row("Cost of goods",money(z.cost))+row("Gross profit",money(z.profit))+
     row("Expenses",money(z.expenses))+row("Stock losses",money(z.losses))+
@@ -3908,11 +4073,13 @@ function helpModal(){
       row("Enter","Add the scanned item / confirm"),row("Esc","Close a dialog")]),
     sec("Selling",[
       el("div",{class:"hint mb",text:"Scan a barcode, or type part of the name — accents, spelling slips and Arabic all work. Scan a carton barcode to sell a whole case. Scale labels add the exact weight."}),
+      el("div",{class:"hint mb",text:"You can scan from any screen: the app jumps to the till and drops the item in the basket. Your basket is kept while you look at other screens."}),
       el("div",{class:"hint mb",text:"No barcode on the item? Use ＋ Custom Item. Not in the system at all? Scan it and the app offers to add it on the spot."})]),
     sec("Fixing mistakes",[
       el("div",{class:"hint mb",text:"Sales History → ↶ undoes a whole sale and puts the stock back. ↩️ refunds part of one. Damaged goods can be written off instead of restocked."})]),
     sec("Every day",[
-      el("div",{class:"hint mb",text:"Open the register with your float in the morning, close and count it at night, then print the Z-Report for the day's figures."})]),
+      el("div",{class:"hint mb",text:"Open the register with your float in the morning, close and count it at night, then print the Z-Report for the day's figures."}),
+      el("div",{class:"hint mb",text:"Money leaving or entering the till that is not a sale — the owner's cut, a supplier paid at the door, change added — goes in Cash Register → Cash in & out, so the count at closing time still adds up."})]),
     sec("Your data",[
       el("div",{class:"hint",html:"The chip in the top bar shows where data is saved. Keep it green. Backups live in <strong>Users → Backup &amp; Data</strong>."})])
   ]),null,{large:true});}
@@ -3939,10 +4106,39 @@ function refreshNavBadges(){var links=document.querySelectorAll("#nav a");
     var old=a.querySelector(".nav-badge");if(old)old.remove();
     var n=navBadge(id);if(n)a.appendChild(el("span",{class:"nav-badge",text:n>99?"99+":String(n)}));}}
 
+/* ---- Scan anywhere ------------------------------------------------------
+   A barcode scanner is a very fast keyboard. When characters arrive in a burst
+   and finish with Enter while no field is focused, that is a scan and not
+   someone typing — so the item goes straight into the basket, jumping to the
+   till first if the cashier was looking at another screen. */
+var GlobalScan={buf:"",last:0,MIN:4,GAP:140,
+  key:function(e){
+    if(e.ctrlKey||e.altKey||e.metaKey)return;
+    var n=e.target,tag=n&&n.tagName;
+    /* Never steal keys from a field, a dialog or the lock screen. */
+    if(tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT"||(n&&n.isContentEditable))return;
+    if(document.querySelector(".modal-overlay")||document.getElementById("lock-screen"))return;
+    if(!SESSION.user||!can("pos"))return;
+    var now=Date.now();
+    if(now-GlobalScan.last>GlobalScan.GAP)GlobalScan.buf="";
+    GlobalScan.last=now;
+    if(e.key==="Enter"){
+      var code=GlobalScan.buf;GlobalScan.buf="";
+      if(code.length>=GlobalScan.MIN){e.preventDefault();GlobalScan.fire(code);}
+      return;}
+    if(e.key.length===1&&/[0-9A-Za-z]/.test(e.key)){GlobalScan.buf+=e.key;return;}
+    GlobalScan.buf="";},
+  fire:function(code){
+    if(location.hash==="#/pos"&&window._posScan){window._posScan(code);return;}
+    /* Not on the till: remember the code, switch, and the POS picks it up. */
+    window._pendingScan=code;
+    location.hash="#/pos";}};
+
 function boot(){DB.load();
   if(!SESSION.user){renderLogin();return;}
   applyLang(SESSION.user_lang||SESSION.lang);applyTheme(SESSION.theme);
   renderShell();
+  if(!window._globalScanOn){document.addEventListener("keydown",GlobalScan.key);window._globalScanOn=true;}
   window.onhashchange=route;
   if(!location.hash)location.hash="#/dashboard";route();
   LockScreen.reset();

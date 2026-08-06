@@ -55,7 +55,9 @@ if the computer ever fails.
 
 Open **Point of Sale**.
 
-- **Scan** the barcode → the item lands in the basket.
+- **Scan** the barcode → the item lands in the basket. You can scan from
+  **any screen** — the app jumps to the till and adds it. Your basket stays put
+  while you look at other screens.
 - **No barcode?** Type part of the name. Spelling mistakes and Arabic both work.
 - **Item not in the system?** Just scan it — the app offers to add it. Type the
   name and how many you received, and it is created and added to the sale.
@@ -94,6 +96,25 @@ Nothing is ever silently deleted — cancelled sales stay in the list marked
 
 **During the day**
 - Sell as normal. Check **Inventory → Alerts** for anything running low.
+
+**Taking money out of the till** (or putting some in)
+
+**Cash Register → Cash in & out**. Use it whenever money moves for a reason
+that is not a sale:
+
+| Reason | What it does |
+|---|---|
+| Owner withdrawal | Money out. **Not** an expense — it does not touch profit. |
+| Supplier / restock paid in cash | Money out, and recorded as an expense. |
+| Expense paid from the till | Money out, and recorded as an expense. |
+| Money taken to the bank | Money out only. |
+| Change / float added | Money in. |
+
+Every movement is listed with who did it, and the drawer count at closing time
+takes them into account. Made a mistake? Press 🗑 on the line and it is undone.
+
+> If the goods were already entered as a **purchase order**, leave the "record
+> as an expense" box unticked — otherwise the cost is counted twice.
 
 **Evening**
 1. **Cash Register → Close Register** — count the drawer and type the amount.
