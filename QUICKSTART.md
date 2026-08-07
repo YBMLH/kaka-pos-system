@@ -138,6 +138,11 @@ goes up automatically.
 **Low on things?** **Purchases → 🔄 Auto Reorder** shows everything below its
 minimum, already grouped by supplier, with their phone number.
 
+**Same item, new price?** Just receive it normally. The app works out what your
+stock now costs on average — it does not pretend the old stock cost the new
+price — then shows you what that did to your margin and suggests a new shelf
+price. Tick the ones you want and press apply, or leave prices alone.
+
 ---
 
 ## 7. Staff accounts

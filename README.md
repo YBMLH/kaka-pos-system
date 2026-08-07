@@ -84,6 +84,14 @@ loads it back on any machine.
 
 ### Details worth knowing
 
+- **Costs that move.** A delivery of something already on the shelf rarely
+  arrives at the old price. Receiving blends the new cost into the old one by
+  weighted average, so stock is valued at what was actually paid rather than
+  being re-valued at the newest price, and older stock keeps its true profit.
+  The app then shows what the change did to each margin and offers the price
+  that restores it — filled in, editable, applied only to the lines you tick.
+  Every delivery's price is kept, so a supplier creeping up is visible in
+  **Products → 💰 Wholesale → What you have paid**.
 - **Case / box handling.** A product can carry a case size (e.g. 40 per box), a
   separate carton barcode and a case price. Scanning the carton sells a whole
   case; stock is still counted in pieces. Purchase orders can be placed by case
