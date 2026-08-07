@@ -96,9 +96,12 @@ loads it back on any machine.
   loyalty and revenue — the record stays for audit. Damaged goods can be written
   off at cost instead of restocked.
 - **Scan from anywhere.** A scanner is just a fast keyboard, so a scan made on
-  any screen jumps to the till and adds the item to the basket. Typing into a
-  field, an open dialog and the lock screen are never intercepted, and the
-  basket survives moving between screens.
+  any screen jumps to the till and adds the item to the basket — including
+  while a search box has focus, which is where a cashier usually is. A burst
+  is only taken over from a field when it could not have been typed by hand
+  (8+ characters, every one under 60 ms), and whatever was in the field is put
+  back. Slow typing, an open dialog and the lock screen are never intercepted,
+  and the basket survives moving between screens.
 - **The drawer is a ledger.** Cash that leaves or enters the till without being
   a sale is recorded with its reason and who did it. An owner withdrawal moves
   money without touching profit; a supplier paid in cash or a till expense also

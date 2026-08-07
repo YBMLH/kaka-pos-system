@@ -60,8 +60,9 @@ if the computer ever fails.
 Open **Point of Sale**.
 
 - **Scan** the barcode → the item lands in the basket. You can scan from
-  **any screen** — the app jumps to the till and adds it. Your basket stays put
-  while you look at other screens.
+  **any screen**, even while you are typing in a search box — the app jumps to
+  the till and adds it, and puts your search back the way it was. Your basket
+  stays put while you look at other screens.
 - **No barcode?** Type part of the name. Spelling mistakes and Arabic both work.
 - **Item not in the system?** Just scan it — the app offers to add it. Type the
   name and how many you received, and it is created and added to the sale.

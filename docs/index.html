@@ -4523,24 +4523,56 @@ function refreshNavBadges(){var links=document.querySelectorAll("#nav a");
    and finish with Enter while no field is focused, that is a scan and not
    someone typing — so the item goes straight into the basket, jumping to the
    till first if the cashier was looking at another screen. */
-var GlobalScan={buf:"",last:0,MIN:4,GAP:140,
+var GlobalScan={buf:"",last:0,fast:true,field:null,fieldValue:"",
+  MIN:4,GAP:140,
+  /* A scan while a search box has focus is the common case — the cashier was
+     looking something up. Those keys cannot simply be ignored, or the code
+     lands in the search box and nothing reaches the basket. So a burst typed
+     into a field is taken over too, but only when it is unmistakably a
+     scanner: at least this many characters, every one arriving faster than a
+     person can type. Whatever was in the field is put back. */
+  FIELD_MIN:8,FIELD_GAP:60,
+  inField:function(n){
+    if(!n)return false;
+    var tag=n.tagName;
+    if(tag==="TEXTAREA"||tag==="SELECT"||n.isContentEditable)return true;
+    if(tag!=="INPUT")return false;
+    return true;},
+  editable:function(n){
+    /* Long-form and secret fields are never a scan target. */
+    if(!n||n.tagName!=="INPUT")return false;
+    var t=(n.getAttribute("type")||"text").toLowerCase();
+    return t==="text"||t==="search"||t==="number"||t==="tel"||t==="";},
+  reset:function(){this.buf="";this.fast=true;this.field=null;this.fieldValue="";},
   key:function(e){
     if(e.ctrlKey||e.altKey||e.metaKey)return;
-    var n=e.target,tag=n&&n.tagName;
-    /* Never steal keys from a field, a dialog or the lock screen. */
-    if(tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT"||(n&&n.isContentEditable))return;
+    var g=GlobalScan,n=e.target;
     if(document.querySelector(".modal-overlay")||document.getElementById("lock-screen"))return;
     if(!SESSION.user||!can("pos"))return;
-    var now=Date.now();
-    if(now-GlobalScan.last>GlobalScan.GAP)GlobalScan.buf="";
-    GlobalScan.last=now;
+    /* The till's own search box already understands scans. */
+    if(n&&n.id==="pos-search")return;
+    var focused=g.inField(n);
+    if(focused&&!g.editable(n))return;
+    var now=Date.now(),gap=now-g.last;
+    if(gap>g.GAP)g.reset();
+    else if(gap>g.FIELD_GAP)g.fast=false;
+    g.last=now;
     if(e.key==="Enter"){
-      var code=GlobalScan.buf;GlobalScan.buf="";
-      if(code.length>=GlobalScan.MIN){e.preventDefault();GlobalScan.fire(code);}
+      var code=g.buf,field=g.field,before=g.fieldValue,wasFast=g.fast;
+      g.reset();
+      if(!code)return;
+      if(focused){
+        /* Only take over from a field when a human could not have typed it. */
+        if(code.length<g.FIELD_MIN||!wasFast||!looksScanned(code))return;
+        e.preventDefault();
+        if(field){field.value=before;field.blur();}
+        g.fire(code);return;}
+      if(code.length>=g.MIN){e.preventDefault();g.fire(code);}
       return;}
     if(e.key.length===1&&(/[0-9A-Za-z]/.test(e.key)||LAYOUT_DIGITS[e.key]!==undefined)){
-      GlobalScan.buf+=e.key;return;}
-    GlobalScan.buf="";},
+      if(!g.buf&&focused){g.field=n;g.fieldValue=n.value;}
+      g.buf+=e.key;return;}
+    g.reset();},
   fire:function(code){
     code=scanDigits(code);
     if(location.hash==="#/pos"&&window._posScan){window._posScan(code);return;}
