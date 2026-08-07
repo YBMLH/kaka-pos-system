@@ -138,10 +138,16 @@ goes up automatically.
 **Low on things?** **Purchases → 🔄 Auto Reorder** shows everything below its
 minimum, already grouped by supplier, with their phone number.
 
-**Same item, new price?** Just receive it normally. The app works out what your
-stock now costs on average — it does not pretend the old stock cost the new
-price — then shows you what that did to your margin and suggests a new shelf
-price. Tick the ones you want and press apply, or leave prices alone.
+**Same item, new price?** Just receive it normally. Each delivery keeps the
+price you paid for it, and the oldest stock is sold first — so the boxes you
+bought cheaply stay cheap in your books until they run out. Your selling price
+is separate: the same item can sell at one price whatever it cost you.
+
+After receiving you are shown what the new price does to your margin, with a
+suggested shelf price. Tick the ones you want, or leave prices alone.
+
+To see what is on the shelf and at what price: open the product →
+**💰 Wholesale → What this stock cost you**.
 
 ---
 
