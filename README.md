@@ -76,7 +76,7 @@ loads it back on any machine.
 | **Point of Sale** | Barcode scanning, typo-tolerant search, case/box selling, weighed items, custom items, hold & resume, discounts (amount or %), wholesale price breaks, loyalty redemption, cash/card/transfer/mixed/credit, optional receipt printing. |
 | **Products** | Full CRUD, scan-to-add, emoji or photo images, categories, cases, wholesale tiers, batches & expiry, barcode labels, CSV import/export. |
 | **Inventory** | Real-time stock, alerts, expiry watch (FEFO), write-offs valued at cost, movement ledger, stocktake with variance. |
-| **Purchasing** | Purchase orders by piece or case, partial receiving, automatic reordering by supplier, returns to supplier. |
+| **Purchasing** | Purchase orders by piece or case, **printable on A4** for the supplier, partial receiving, automatic reordering by supplier, returns to supplier. |
 | **People** | Suppliers with balances and payments; customers with credit, purchase history and loyalty points. |
 | **Money** | Expenses, cash register open/close with counting, cash in/out of the drawer (owner withdrawals, suppliers paid at the door, till expenses), Z-report day-end close, Zakat calculator. |
 | **Reports** | Sales, inventory, financial (incl. stock losses), supplier, customer and employee reports with CSV export. |
@@ -190,7 +190,12 @@ loads it back on any machine.
   detector. Available on Chrome/Edge on Android and ChromeOS; other browsers
   show a clear message and you keep using a scanner.
 - **Receipt printers** — receipts print through the normal browser print dialog
-  at 58 mm or 80 mm; pick your thermal printer there.
+  at 58 mm or 80 mm; pick your thermal printer there. No thermal printer? Set
+  **Settings → Receipt paper → A4** and a receipt prints on a plain sheet.
+- **One sheet, always** — the purchase order, Z-report, Zakat report and A4
+  receipt shrink to fit a single page rather than spilling a few lines onto a
+  second one. Rows are never split across the fold. Thermal rolls are
+  continuous paper and keep their full size.
 
 ## Keyboard
 

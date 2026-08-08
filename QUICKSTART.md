@@ -135,6 +135,10 @@ takes them into account. Made a mistake? Press 🗑 on the line and it is undone
 **piece or box**. When the delivery arrives, press **Receive** and the stock
 goes up automatically.
 
+Need to hand the order to the supplier? Press **🖨** on the order line. It
+prints on one A4 sheet with your shop details, theirs, what you want with case
+sizes spelled out, the total, and space for both signatures.
+
 **Low on things?** **Purchases → 🔄 Auto Reorder** shows everything below its
 minimum, already grouped by supplier, with their phone number.
 
