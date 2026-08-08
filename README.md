@@ -148,7 +148,16 @@ loads it back on any machine.
   piece of text passes through on its way to the screen, so nothing had to be
   rewired call site by call site — and anything the app does not recognise
   (product names, notes, amounts) is left exactly as typed.
-- **Look and feel.** Apple-style frosted glass: layered translucent surfaces
+- **Look and feel.** A flat, uniform surface system: one radius scale, one
+  border, one shadow, and the accent colour used the same way everywhere. The
+  till lists products as full-width rows — name, stock, barcode, price and one
+  round add button per line, which reads far better than tiles for long Arabic
+  and French names (**▦ Tiles** switches back, remembered per till). The cart
+  carries a four-button quick row — clear, hold, held sales, reprint — above a
+  single large charge button. Blur is now limited to the sidebar, top bar and
+  dialogs; everything inside the page is a solid card, which also renders
+  faster on modest till hardware. Underneath it remains the same Apple-style
+  frosted glass: layered translucent surfaces
   over a soft mesh background, SF typography and Apple system accents. Blur is
   limited to large structural surfaces (sidebar, top bar, cards, cart, dialogs)
   and never applied to list rows or product tiles, so it stays smooth on modest
