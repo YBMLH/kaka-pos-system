@@ -148,7 +148,10 @@ loads it back on any machine.
   piece of text passes through on its way to the screen, so nothing had to be
   rewired call site by call site — and anything the app does not recognise
   (product names, notes, amounts) is left exactly as typed.
-- **Look and feel.** A flat, uniform surface system: one radius scale, one
+- **Look and feel.** The menu follows the theme — a white panel with a
+  hairline edge and a soft accent tint on the active entry in light mode, the
+  dark rail in dark mode — so the screen is one design rather than two sharing
+  it. A flat, uniform surface system: one radius scale, one
   border, one shadow, and the accent colour used the same way everywhere. The
   till lists products as full-width rows — name, stock, barcode, price and one
   round add button per line, which reads far better than tiles for long Arabic

@@ -822,6 +822,30 @@ body[data-theme="dark"] .pos-tile,body[data-theme="dark"] .login-card{
 .cq-key{font-size:9px;color:var(--text-muted);font-weight:600}
 .cart-actions{grid-template-columns:1fr;gap:9px}
 .cart-actions .btn-lg{padding:15px;font-size:15.5px;border-radius:var(--r-ctl)}
+/* ---- Light theme keeps the menu light too --------------------------------
+   A dark rail against white content is two designs sharing a screen. In the
+   light theme the menu is a white panel with a hairline edge: grey labels,
+   the active entry a soft tint of the accent rather than a solid block, and
+   icons in pale tiles. The dark theme keeps its dark rail. */
+body:not([data-theme="dark"]) .sidebar{
+  background:var(--surface);border-inline-end:1px solid var(--border);
+  backdrop-filter:none;box-shadow:none}
+body:not([data-theme="dark"]) .brand{color:var(--text)}
+body:not([data-theme="dark"]) .brand-tag,
+body:not([data-theme="dark"]) .nav-group-label,
+body:not([data-theme="dark"]) .user-role{color:var(--text-muted)}
+body:not([data-theme="dark"]) .nav a{color:var(--text-soft)}
+body:not([data-theme="dark"]) .nav .nav-icon{background:var(--surface-3)}
+body:not([data-theme="dark"]) .nav a:hover{background:var(--surface-2);color:var(--text)}
+body:not([data-theme="dark"]) .nav a.active{
+  background:var(--primary-soft);color:var(--primary);font-weight:680}
+body:not([data-theme="dark"]) .nav a.active .nav-icon{
+  background:var(--primary);color:#fff}
+body:not([data-theme="dark"]) .nav a.active .nav-badge{background:var(--danger);color:#fff}
+body:not([data-theme="dark"]) .sidebar-footer{border-top:1px solid var(--border)}
+body:not([data-theme="dark"]) .user-chip{background:var(--surface-2);border:1px solid var(--border)}
+body:not([data-theme="dark"]) .user-name{color:var(--text)}
+body:not([data-theme="dark"]) .nav::-webkit-scrollbar-thumb{background:var(--border-strong)}
 </style>
 </head>
 <body data-theme="light">
