@@ -4048,8 +4048,9 @@ VIEWS.purchases={title:function(){return t("nav.purchases");},render:function(ro
       {key:"recv",label:"Receive Now",num:true,render:function(x){return x.i;}},
       {key:"pcs",label:"= Pieces",num:true,render:function(x){return num(x.out*(x.it.pack_units||1),0);}}],rows),[{label:t("common.cancel"),class:"btn-ghost"},
       {label:"Confirm Receiving",class:"btn-success",onClick:function(){
-        var repriced=[];
+        var repriced=[],receivedValue=0;
         r.items.forEach(function(it){var recv=Math.min(Math.max(parseFloat(inputs[it.id].value)||0,0),it.quantity-it.received_qty);
+        receivedValue+=recv*(it.cost||0);
         if(recv>0){it.received_qty+=recv;var per=it.pack_units||1;
           if(it.product_id){adjustStock(it.product_id,recv*per,"purchase",
             r.reference+(per>1?(" ("+recv+" × "+per+")"):""));
@@ -4059,7 +4060,16 @@ VIEWS.purchases={title:function(){return t("nav.purchases");},render:function(ro
             if(res.changed)repriced.push(res);}}}});
         var remaining=r.items.reduce(function(s,it){return s+(it.quantity-it.received_qty);},0);
         r.status=remaining<=0?"received":"partial";var sup=DB.data.suppliers.filter(function(x){return x.id===r.supplier_id;})[0];
-        if(sup)sup.balance+=(r.total-(r.paid||0));DB.save();log("receive_purchase","purchase",r.reference);toast("Received ("+r.status+")","success");draw();
+        /* A supplier is owed for what actually arrived. Charging the whole
+           order on every receipt billed a part-delivered order twice over. */
+        if(sup){
+          receivedValue=round2(receivedValue);
+          var prepaidLeft=round2(Math.max(0,(r.paid||0)-(r.paid_applied||0)));
+          var settled=Math.min(prepaidLeft,receivedValue);
+          r.paid_applied=round2((r.paid_applied||0)+settled);
+          sup.balance=round2((sup.balance||0)+round2(receivedValue-settled));}
+        r.received_value=round2((r.received_value||0)+receivedValue);
+        DB.save();log("receive_purchase","purchase",r.reference+" worth "+receivedValue);toast("Received ("+r.status+")","success");draw();
         if(repriced.length)costChangeReview(repriced,draw);}}],{large:true});}
   function newOrder(){var items=[];var supSel=el("select",{},[el("option",{value:""},"— Supplier —")].concat(DB.data.suppliers.map(function(s){return el("option",{value:s.id},s.company_name);})));
     var invoice=el("input",{placeholder:"Invoice number"});var itemsBox=el("div",{});var search=el("input",{placeholder:"Search product to add..."});var timer;
