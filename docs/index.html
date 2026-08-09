@@ -1722,8 +1722,12 @@ function nextCost(p){var l=costLayers(p)[0];return l?l.cost:(p.purchase_price||0
 function syncCostLayers(p){
   var have=layersQty(p),want=Math.round((p.quantity||0)*1000)/1000;
   if(Math.abs(have-want)<0.0005)return false;
-  if(have<want)costLayers(p).push({qty:Math.round((want-have)*1000)/1000,
-    cost:p.purchase_price||0,at:new Date().toISOString(),ref:"opening"});
+  if(have<want){
+    var add=Math.round((want-have)*1000)/1000,ls0=costLayers(p),tail=ls0[ls0.length-1];
+    /* Fold into the last layer when it cost the same, so repeated edits do
+       not leave a trail of identical layers. */
+    if(tail&&Math.abs(tail.cost-(p.purchase_price||0))<0.0001)tail.qty=Math.round((tail.qty+add)*1000)/1000;
+    else ls0.push({qty:add,cost:p.purchase_price||0,at:new Date().toISOString(),ref:"opening"});}
   else{
     var over=have-want,ls=costLayers(p);
     while(over>0.0005&&ls.length){
@@ -3416,7 +3420,13 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
         var pics=picker.values();v.emoji=pics.emoji;v.image=pics.image;
         v.tiers=tiers.values();
         if(r){var p=DB.data.products.filter(function(x){return x.id===r.id;})[0];var oldQ=p.quantity,oldCost=p.purchase_price;
-          for(var k in v)p[k]=v[k];if(v.quantity!==oldQ)adjustStock(r.id,v.quantity-oldQ,"adjustment","Manual edit");
+          /* Stock only ever moves through adjustStock, which writes the new
+             figure AND the ledger entry. Copying the typed quantity across as
+             well counted it twice: editing 5 to 24 stored 43. */
+          var newQ=(v.quantity===undefined||v.quantity===null||v.quantity==="")?oldQ:(parseFloat(v.quantity)||0);
+          delete v.quantity;
+          for(var k in v)p[k]=v[k];
+          if(newQ!==oldQ)adjustStock(r.id,newQ-oldQ,"adjustment","Manual edit");
           /* Typing a cost here means "this is what my stock cost me", so it
              replaces the layers rather than sitting alongside them. */
           if(Math.abs((v.purchase_price||0)-(oldCost||0))>0.0001)
@@ -3424,9 +3434,16 @@ VIEWS.products={title:function(){return t("nav.products");},render:function(root
           else syncCostLayers(p);
           log("update_product","product",r.id);}
         else{v.id=DB.nextId("products");v.archived=0;v.batches=[];v.created_at=new Date().toISOString();
-          v.cost_layers=(v.quantity>0)?[{qty:v.quantity,cost:v.purchase_price||0,at:new Date().toISOString(),ref:"opening"}]:[];
+          /* Same here: the product starts empty and the opening stock arrives
+             through adjustStock, so the shelf, the ledger and the cost layer
+             all agree on one number. */
+          var opening=parseFloat(v.quantity)||0;
+          v.quantity=0;v.cost_layers=[];
           DB.data.products.push(v);
-          if(v.quantity)adjustStock(v.id,v.quantity,"initial","Initial stock");log("create_product","product",v.id);}
+          if(opening){adjustStock(v.id,opening,"initial","Initial stock");
+            v.cost_layers=[{qty:opening,cost:v.purchase_price||0,
+              at:new Date().toISOString(),ref:"opening"}];}
+          log("create_product","product",v.id);}
         DB.save();toast("Saved","success");load();}}],{large:true});}
   /* What this product has cost over time. A supplier raising prices twice in
      a month is obvious here and invisible everywhere else. */
@@ -5076,6 +5093,13 @@ var GlobalScan={buf:"",last:0,fast:true,field:null,fieldValue:"",
     /* Not on the till: remember the code, switch, and the POS picks it up. */
     window._pendingScan=code;
     location.hash="#/pos";}};
+
+/* A focused number input changes value on a mouse wheel, so scrolling a long
+   form past the quantity box silently edits it. Let the page scroll instead. */
+document.addEventListener("wheel",function(e){
+  var n=document.activeElement;
+  if(n&&n.tagName==="INPUT"&&(n.getAttribute("type")||"").toLowerCase()==="number"&&n===e.target)n.blur();
+},{passive:true});
 
 function boot(){DB.load();
   if(!SESSION.user){renderLogin();return;}
