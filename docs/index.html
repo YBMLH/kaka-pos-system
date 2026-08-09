@@ -1866,9 +1866,14 @@ function packPlural(p,n){
   /* English adds -es to Box, French simply adds -s. */
   return SESSION.lang==="fr"?(name+(/s$/i.test(name)?"":"s")):(name+"es");}
 function fmtStock(p){var q=p.quantity||0;var u=p.units_per_box||0;
+  /* The piece count always comes first. Showing only "1 Box" for 24 pieces
+     reads as though the shop has one of something, and made a quantity that
+     had been typed correctly look like it had been changed on save. */
+  var pieces=num(q,q%1?2:0)+" "+p.unit;
   if(u>1){var b=Math.floor(q/u),r=Math.round((q-b*u)*100)/100;
-    return (b?b+" "+packPlural(p,b):"")+(b&&r?" + ":"")+(r||!b?num(r,r%1?2:0)+" "+p.unit:"");}
-  return num(q,q%1?2:0)+" "+p.unit;}
+    var cases=(b?b+" "+packPlural(p,b):"")+(b&&r?" + ":"")+(r&&b?num(r,r%1?2:0)+" "+p.unit:"");
+    if(cases)return pieces+" · "+cases;}
+  return pieces;}
 function stockTitle(p){return hasBox(p)?(num(p.quantity,2)+" "+p.unit+
   (SESSION.lang==="fr"?" au total · ":" total · ")+p.units_per_box+" "+p.unit+
   (SESSION.lang==="fr"?" par ":" per ")+trUI(packName(p))):"";}

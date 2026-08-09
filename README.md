@@ -95,8 +95,10 @@ loads it back on any machine.
   shelf and at what price in **Products → 💰 Wholesale → What this stock cost
   you**. After receiving, the app shows what the new price does to your margin
   and offers the shelf price that restores it, applied only where you tick.
-- **Case / box handling.** A product can carry a case size (e.g. 40 per box), a
-  separate carton barcode and a case price. Scanning the carton sells a whole
+- **Case / box handling.** Stock is always counted and shown in pieces first
+  (`24 pcs · 1 Box`), because reading only "1 Box" makes a correctly typed
+  quantity look as though it was changed on save. A product can carry a case
+  size (e.g. 40 per box), a separate carton barcode and a case price. Scanning the carton sells a whole
   case; stock is still counted in pieces. Purchase orders can be placed by case
   and receiving converts to pieces, storing cost per piece.
 - **Weighed items.** Deli and produce scale labels (in-store EAN-13 embedding
