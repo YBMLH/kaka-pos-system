@@ -196,13 +196,16 @@ loads it back on any machine.
 - **Camera scanning** — a 📷 button uses the browser's built-in barcode
   detector. Available on Chrome/Edge on Android and ChromeOS; other browsers
   show a clear message and you keep using a scanner.
-- **Cash drawer** — an electric drawer is opened by the printer it plugs into.
-  On Chrome or Edge the app can hold the printer's serial port and send the
-  ESC/POS pulse itself, so the drawer opens with no paper used; otherwise it
-  prints a one-line slip, which printers configured to open on print treat as
-  the signal. It opens automatically on cash and mixed payments (switchable),
-  and there is an **Open drawer** button on the Cash Register screen.
-  **Settings → 💵 Cash drawer** connects the port and tests it.
+- **Cash drawer** — the flat cable from a drawer carries 12 volts and nothing
+  else, so something has to send the pulse. Two ways are supported: a **USB
+  drawer trigger**, which the app drives directly over Web Serial (Chrome or
+  Edge, no printer and no paper needed, three selectable pulses for drawers
+  that answer on a different pin), or a **receipt printer** with the drawer
+  plugged into its DK/RJ11 socket, where the app prints a one-line slip. Until
+  one is configured the drawer button explains the wiring rather than opening
+  a print dialog for a printer that is not there. Opens automatically on cash
+  and mixed payments (switchable), with a button on the Cash Register screen
+  and setup under **Settings → 💵 Cash drawer**.
 - **Receipt printers** — receipts print through the normal browser print dialog
   at 58 mm or 80 mm; pick your thermal printer there. No thermal printer? Set
   **Settings → Receipt paper → A4** and a receipt prints on a plain sheet.

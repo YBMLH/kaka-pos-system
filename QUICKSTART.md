@@ -185,11 +185,19 @@ The app is built to survive a bad day.
 
 ## 9. The cash drawer
 
-If the drawer is plugged into the receipt printer, it opens by itself on cash
-payments. Nothing to set up — but if it does not, go to
-**Paramètres → 💵 Tiroir-caisse** and press **Connecter le port de
-l'imprimante** once. There is also an **Ouvrir le tiroir** button on the
-**Caisse** screen for when you need it open without a sale.
+The flat cable coming out of the drawer looks like a network cable, but it is
+not one — it never goes into the computer. Something has to send it a pulse:
+
+- **With a receipt printer:** plug that cable into the socket on the back of
+  the printer marked **DK**, **RJ11** or **Cash Drawer**, and switch on "open
+  drawer" in the printer's settings. Printing then opens it.
+- **With no printer:** buy a **USB cash-drawer trigger** (a "USB drawer kick
+  cable"). It costs very little, plugs into a USB port, and takes the drawer's
+  cable. Connect it once in **Paramètres → 💵 Tiroir-caisse** and the button
+  opens the drawer — no printer, no paper.
+
+Until one of those is in place the drawer opens with its key only; no software
+can change that. Sales and cash movements are recorded either way.
 
 ---
 
