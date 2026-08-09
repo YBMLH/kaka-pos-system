@@ -120,10 +120,15 @@ loads it back on any machine.
   these movements.
 - **Keyboard layouts.** A scanner types as though the computer were set to a
   US keyboard, so on an AZERTY or Arabic layout every digit arrives as a
-  symbol. Codes that match nothing are retried through a layout translation
-  before being given up on, so scanning works either way — and a code that
-  genuinely contains a dash still matches itself first. **Settings → Test the
-  barcode scanner** reports what was sent versus what was read.
+  symbol. Rather than guess at layouts, the app reads the **physical keys**:
+  a browser reports both the character a layout produced and the key that was
+  pressed, and `Digit7` is the 7 key on every keyboard ever made. A fast burst
+  of number keys is therefore read as its digits whatever the machine is set
+  to, in the till search box and from any other screen. Character translation
+  for the French, Belgian, Swiss and Arabic-Indic digit rows remains as a
+  fallback, and a code that genuinely contains a dash still matches itself
+  first. **Settings → Test the barcode scanner** shows what the scanner typed,
+  which keys were actually pressed, and what the app made of it.
 - **Old machines are handled.** The app checks what the browser can actually
   do and adapts: no emoji font (Windows 7 and earlier) switches every icon to
   plain words and shows a product's initial instead of a picture; no
