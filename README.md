@@ -74,7 +74,7 @@ loads it back on any machine.
 | Area | Highlights |
 |------|-----------|
 | **Point of Sale** | Barcode scanning, typo-tolerant search, case/box selling, weighed items, custom items, hold & resume, discounts (amount or %), wholesale price breaks, loyalty redemption, cash/card/transfer/mixed/credit, optional receipt printing. |
-| **Products** | Full CRUD, scan-to-add, emoji or photo images, categories, cases, wholesale tiers, batches & expiry, barcode labels, CSV import/export. |
+| **Products** | Full CRUD including permanent delete for something typed in wrong (archive keeps the history; delete removes the product and its movements while past sales keep their own copy of the name and price), scan-to-add, emoji or photo images, categories, cases, wholesale tiers, batches & expiry, barcode labels, CSV import/export. |
 | **Inventory** | Real-time stock, alerts, expiry watch (FEFO), write-offs valued at cost, movement ledger, stocktake with variance. |
 | **Purchasing** | Purchase orders by piece or case, **printable on A4** for the supplier, partial receiving, automatic reordering by supplier, returns to supplier. |
 | **People** | Suppliers with balances and payments; customers with credit, purchase history and loyalty points. |
@@ -196,6 +196,13 @@ loads it back on any machine.
 - **Camera scanning** — a 📷 button uses the browser's built-in barcode
   detector. Available on Chrome/Edge on Android and ChromeOS; other browsers
   show a clear message and you keep using a scanner.
+- **Cash drawer** — an electric drawer is opened by the printer it plugs into.
+  On Chrome or Edge the app can hold the printer's serial port and send the
+  ESC/POS pulse itself, so the drawer opens with no paper used; otherwise it
+  prints a one-line slip, which printers configured to open on print treat as
+  the signal. It opens automatically on cash and mixed payments (switchable),
+  and there is an **Open drawer** button on the Cash Register screen.
+  **Settings → 💵 Cash drawer** connects the port and tests it.
 - **Receipt printers** — receipts print through the normal browser print dialog
   at 58 mm or 80 mm; pick your thermal printer there. No thermal printer? Set
   **Settings → Receipt paper → A4** and a receipt prints on a plain sheet.

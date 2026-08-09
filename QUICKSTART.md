@@ -183,7 +183,17 @@ The app is built to survive a bad day.
 
 ---
 
-## 9. Working in French
+## 9. The cash drawer
+
+If the drawer is plugged into the receipt printer, it opens by itself on cash
+payments. Nothing to set up — but if it does not, go to
+**Paramètres → 💵 Tiroir-caisse** and press **Connecter le port de
+l'imprimante** once. There is also an **Ouvrir le tiroir** button on the
+**Caisse** screen for when you need it open without a sale.
+
+---
+
+## 10. Working in French
 
 Press **FR** in the top bar. Everything changes — menus, buttons, messages,
 tables, and the tickets and Z-report you print. Switch back with **EN** at any
@@ -191,7 +201,7 @@ time; it only changes what you see, never your data.
 
 ---
 
-## 10. Scanner typing strange symbols?
+## 11. Scanner typing strange symbols?
 
 If a scan comes out as `-&&&ààààà&ààà` instead of numbers, the scanner is
 typing on a US keyboard while the computer is set to French or Arabic. **The
@@ -205,7 +215,7 @@ and what the app read, so you can check in five seconds.
 
 ---
 
-## 11. Need a reminder?
+## 12. Need a reminder?
 
 Press the **❓** button at the top of the screen at any time — shortcuts and
 short how-tos are built in.
