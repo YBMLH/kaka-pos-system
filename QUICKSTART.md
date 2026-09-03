@@ -84,7 +84,10 @@ confirmation. You can always reprint later from **Sales History**.
 Everything is recoverable. Go to **Sales History**:
 
 - **↶ Undo** — cancels the whole sale and puts the stock back.
-- **↩️ Refund** — gives back part of a sale.
+- **↩️ Refund** — gives back part of a sale. Nothing is selected when it
+  opens: press **Celui-ci** on the line the customer brought back (or **1** for
+  a single piece), check the amount at the bottom, then confirm. Everything
+  else on that receipt stays sold.
 - If the goods came back **damaged**, tick the box in the undo screen and they
   are recorded as a loss instead of going back on the shelf.
 

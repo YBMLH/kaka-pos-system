@@ -73,7 +73,7 @@ loads it back on any machine.
 
 | Area | Highlights |
 |------|-----------|
-| **Point of Sale** | Barcode scanning, typo-tolerant search, case/box selling, weighed items, custom items, hold & resume, discounts (amount or %), wholesale price breaks, loyalty redemption, cash/card/transfer/mixed/credit, optional receipt printing. |
+| **Point of Sale** | Half-screen basket on wide monitors with a counter-readable total, barcode scanning, typo-tolerant search, case/box selling, weighed items, custom items, hold & resume, discounts (amount or %), wholesale price breaks, loyalty redemption, cash/card/transfer/mixed/credit, optional receipt printing. |
 | **Products** | Full CRUD including permanent delete for something typed in wrong (archive keeps the history; delete removes the product and its movements while past sales keep their own copy of the name and price), scan-to-add, emoji or photo images, categories, cases, wholesale tiers, batches & expiry, barcode labels, CSV import/export. |
 | **Inventory** | Real-time stock, alerts, expiry watch (FEFO), write-offs valued at cost, movement ledger, stocktake with variance. |
 | **Purchasing** | Purchase orders by piece or case, **printable on A4** for the supplier, partial receiving, automatic reordering by supplier, returns to supplier. |
@@ -105,6 +105,10 @@ loads it back on any machine.
   price or weight) resolve by PLU and add the exact weight and price.
 - **Expiry / FEFO.** Batches carry their own expiry; sales always take the
   soonest-to-expire stock first.
+- **Returning one item.** The refund screen starts with nothing selected, and
+  every line has its own **This one** and **1** button, so a customer bringing
+  back a single item out of five is two clicks — the rest of the sale is
+  untouched. The running total shows what is being handed back before it is.
 - **Mistakes are recoverable.** Void a sale to restore stock and reverse credit,
   loyalty and revenue — the record stays for audit. Damaged goods can be written
   off at cost instead of restocked.
