@@ -863,15 +863,19 @@ body:not([data-theme="dark"]) .nav::-webkit-scrollbar-thumb{background:var(--bor
   .cl-name{font-size:15px}
 }
 /* The amount due, big enough to be read across the counter. */
+/* The amount due is the one thing on this screen a customer reads, so it is
+   given its own panel and as much size as the cart width allows. */
 .cart-grand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
-  margin:10px 0 2px;padding-top:12px;border-top:2px solid var(--border-strong)}
-.cart-grand .cg-label{font-size:13px;font-weight:650;color:var(--text-muted);
-  text-transform:uppercase;letter-spacing:.06em}
-.cart-grand .cg-value{font-size:clamp(30px,3.2vw,52px);font-weight:800;line-height:1;
-  color:var(--primary);letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap}
+  margin:10px 0 2px;padding:12px 16px;border-radius:16px;
+  background:var(--primary-soft);border:1px solid var(--border)}
+.cart-grand .cg-label{font-size:13px;font-weight:700;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.08em}
+.cart-grand .cg-value{font-size:44px;font-weight:850;line-height:1.02;
+  color:var(--primary);letter-spacing:-.025em;font-variant-numeric:tabular-nums;
+  white-space:nowrap;overflow:hidden}
 @media (min-width:1400px){
-  .cart-grand{flex-direction:column;align-items:stretch;gap:2px;text-align:center}
-  .cart-grand .cg-value{font-size:clamp(40px,4.4vw,72px)}
+  .cart-grand{flex-direction:column;align-items:stretch;gap:4px;text-align:center;padding:18px 20px}
+  .cart-grand .cg-label{font-size:15px}
 }
 </style>
 </head>
@@ -2491,9 +2495,12 @@ VIEWS.pos={title:function(){return t("nav.pos");},render:function(root){
     var discCtl=can("discount")?el("div",{class:"flex",style:"gap:4px"},[discField,toggle,el("span",{class:"muted",style:"font-size:12px",text:"−"+money(tot.disc)})]):el("span",{text:money(tot.disc)});
     totalsBox.appendChild(el("div",{class:"cart-total-row"},[el("span",{text:t("pos.discount")}),discCtl]));
     if(tot.taxOn)totalsBox.appendChild(row(tot.incl?(t("pos.tax")+" (incl.)"):t("pos.tax"),money(tot.tax)));
+    var grandValue=el("div",{class:"cg-value",text:money(tot.total)});
     totalsBox.appendChild(el("div",{class:"cart-grand"},[
-      el("div",{class:"cg-label",text:t("common.total")}),
-      el("div",{class:"cg-value",text:money(tot.total)})]));
+      el("div",{class:"cg-label",text:t("common.total")}),grandValue]));
+    /* Grow it to fill the width it has and shrink it back if the amount is a
+       long one, so 9.00 and 12,345.00 are both as big as they can be. */
+    fitBigNumber(grandValue);
     /* The four things a cashier reaches for mid-sale, then one big button. */
     function quick(icon,label,key,fn){
       return el("button",{class:"cq",onClick:fn},[
@@ -2739,6 +2746,47 @@ function printReceipt(sale){var st=DB.data.settings;var w=window.open("","_blank
         "window.print();}<\/script>"
        :"<script>window.onload=function(){window.print();}<\/script>")+
     "</body></html>"));w.document.close();}
+
+/* Set a number as large as its box allows, between sensible limits.
+   The value is clipped (overflow:hidden) and centred, so its own scrollWidth
+   never reports how wide the text really wants to be — it always comes back
+   equal to the box. So the text is measured once in a throwaway span parked
+   off-screen, and the size worked out from that in one step. */
+function fitBigNumber(node,max,min){
+  if(!node||!node.parentNode||!node.ownerDocument)return;
+  max=max||(window.innerWidth>=1400?104:56);min=min||20;
+  var box=node.parentNode,cs=null,pad=0;
+  try{cs=getComputedStyle(box);
+    pad=parseFloat(cs.paddingLeft||0)+parseFloat(cs.paddingRight||0);}catch(e){}
+  var room=(box.clientWidth||0)-pad-4;
+  /* On a narrow screen the label sits beside the number, not above it. */
+  if(cs&&cs.flexDirection==="row"){
+    var kids=box.children,gap=parseFloat(cs.columnGap||cs.gap||0)||0;
+    for(var i=0;i<kids.length;i++)if(kids[i]!==node)room-=kids[i].offsetWidth;
+    room-=gap*Math.max(0,kids.length-1);}
+  if(room<=0)return;
+  var REF=100;
+  node.style.fontSize=REF+"px";
+  var ns=null;try{ns=getComputedStyle(node);}catch(e){}
+  var probe=document.createElement("span");
+  probe.style.cssText="position:absolute;left:-9999px;top:0;white-space:nowrap;visibility:hidden;padding:0;margin:0";
+  probe.style.fontSize=REF+"px";
+  if(ns){probe.style.fontFamily=ns.fontFamily;probe.style.fontWeight=ns.fontWeight;
+    probe.style.fontStyle=ns.fontStyle;probe.style.letterSpacing=ns.letterSpacing;}
+  probe.appendChild(document.createTextNode(node.textContent||""));
+  document.body.appendChild(probe);
+  var w=probe.offsetWidth||Math.ceil(probe.getBoundingClientRect().width);
+  document.body.removeChild(probe);
+  if(!w){node.style.fontSize=max+"px";return max;}
+  var size=Math.floor(REF*room/w);
+  if(size>max)size=max;
+  if(size<min)size=min;
+  node.style.fontSize=size+"px";
+  return size;}
+/* A window that changes size changes how much room the number has. */
+addEventListener("resize",function(){
+  var v=document.querySelector(".cart-grand .cg-value");
+  if(v)fitBigNumber(v);});
 
 /* ---- Cash drawer -------------------------------------------------------
    An electric drawer has no lock of its own: it opens when it is sent 12
