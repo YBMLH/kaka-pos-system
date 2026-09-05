@@ -108,7 +108,11 @@ loads it back on any machine.
 - **Returning one item.** The refund screen starts with nothing selected, and
   every line has its own **This one** and **1** button, so a customer bringing
   back a single item out of five is two clicks — the rest of the sale is
-  untouched. The running total shows what is being handed back before it is.
+  untouched. Where a line was bought several times, **1** returns a single
+  piece and the box takes any number, and the refund stays available on a
+  part-returned receipt so the customer can come back again for another piece
+  until the whole line is used up. The running total shows what is being
+  handed back before it is.
 - **Mistakes are recoverable.** Void a sale to restore stock and reverse credit,
   loyalty and revenue — the record stays for audit. Damaged goods can be written
   off at cost instead of restocked.

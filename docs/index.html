@@ -4621,7 +4621,12 @@ VIEWS.history={title:function(){return t("nav.history");},render:function(root){
         (r.status==="refunded"||r.status==="voided"?"red":"orange"))+(r.status==="voided"&&r.void_note?("<div class='t-sub'>"+esc(r.void_note)+"</div>"):"");}},
       {key:"act",label:"",num:true,render:function(r){var w=el("div",{class:"flex",style:"justify-content:flex-end"});
         w.appendChild(iconAction("🖨","Reprint",function(){printReceipt(r);}));
-        if(can("refund")&&r.status==="completed")w.appendChild(iconAction("↩️","Refund",function(){refundModal(r);}));
+        /* A customer can come back a second time for another piece of the
+           same receipt, so the refund stays available until every line has
+           been returned. */
+        var canReturn=(r.items||[]).reduce(function(n,it){return n+(it.quantity-(it.refunded_qty||0));},0);
+        if(can("refund")&&r.status!=="voided"&&canReturn>0.0001)
+          w.appendChild(iconAction("↩️","Refund",function(){refundModal(r);}));
         if(can("refund")&&r.status!=="voided")w.appendChild(iconAction("↶","Undo / void this sale",function(){voidModal(r);}));
         if(can("*")&&r.status==="voided")w.appendChild(iconAction("🗑","Delete permanently",function(){deleteSale(r);}));
         return w;}}],rows,{empty:"No sales"}));

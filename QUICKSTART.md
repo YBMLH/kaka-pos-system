@@ -88,6 +88,9 @@ Everything is recoverable. Go to **Sales History**:
   opens: press **Celui-ci** on the line the customer brought back (or **1** for
   a single piece), check the amount at the bottom, then confirm. Everything
   else on that receipt stays sold.
+  Bought three of something and they bring back one? Press **1**. They can come
+  back later for another one — the refund button stays on the receipt until
+  every piece has been returned.
 - If the goods came back **damaged**, tick the box in the undo screen and they
   are recorded as a loss instead of going back on the shelf.
 
