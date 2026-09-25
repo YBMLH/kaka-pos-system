@@ -78,7 +78,7 @@ loads it back on any machine.
 | **Inventory** | Real-time stock, alerts, expiry watch (FEFO), write-offs valued at cost, movement ledger, stocktake with variance. |
 | **Purchasing** | Purchase orders by piece or case, **printable on A4** for the supplier, partial receiving, automatic reordering by supplier, returns to supplier. |
 | **People** | Suppliers with balances and payments; customers with credit, purchase history and loyalty points. |
-| **Money** | Expenses, cash register open/close with counting, cash in/out of the drawer (owner withdrawals, suppliers paid at the door, till expenses), Z-report day-end close, Zakat calculator. |
+| **Money** | Running-cost expenses (stock purchases deliberately excluded — see below), cash register open/close with counting, cash in/out of the drawer (owner withdrawals, suppliers paid at the door, till expenses), dated supplier payments by method, Z-report day-end close, Zakat calculator. |
 | **Reports** | Sales, inventory, financial (incl. stock losses), supplier, customer and employee reports with CSV export. |
 | **Branding** | The shop's own logo on the sign-in screen, in the sidebar corner, on the browser tab and at the top of every printed receipt, purchase order, Z-report and Zakat report. |
 | **Admin** | Four roles with enforced permissions, audit log, backup/restore, store settings. |
@@ -102,6 +102,33 @@ loads it back on any machine.
   size (e.g. 40 per box), a separate carton barcode and a case price. Scanning the carton sells a whole
   case; stock is still counted in pieces. Purchase orders can be placed by case
   and receiving converts to pieces, storing cost per piece.
+- **What counts as profit.** Revenue − cost of goods = gross profit; take off
+  running costs and stock losses and that is net profit. **Buying stock is not
+  an expense** — paying a supplier turns cash into goods that are still worth
+  what was paid, and that money reaches the profit figure later, once, as the
+  cost of goods on the day each item sells. Recording it as an expense as well
+  charged the shop twice for every delivery and showed a loss on restocking
+  days, so the Restocking expense category is gone, paying a supplier from the
+  till no longer writes an expense, and any "Restocking" expense already on
+  file is kept and shown but left out of profit. What went out on goods is
+  reported on its own — **Stock bought** — on the dashboard, the financial
+  report, the Z-report and the suppliers page, from one shared total so every
+  screen quotes the same number. The identity the books keep: everything paid
+  for goods is either sold (cost of goods), lost (write-offs) or still on the
+  shelf (inventory value).
+- **Costs a refund gives back.** A return is priced at what the customer
+  actually paid, not the shelf price: the refund is the drop in what the sale
+  is worth, so a basket discount and any redeemed loyalty points come off it
+  too. The cost that comes back off the books is the exact FIFO layers that
+  line still holds, not an averaged unit cost — with stock bought at two
+  prices an average is wrong, and since a return hands back the oldest and
+  usually cheapest layer first, the error always ran the same way and quietly
+  added profit the shop never made.
+- **Products with no cost price.** Nothing on a shelf is free, so a product
+  saved with a selling price and no cost is warned about once at the moment it
+  can still be typed in, and listed by **Business Health** afterwards. Until
+  the cost is filled in, every sale of that item counts as pure profit — the
+  app reports it rather than inventing a number.
 - **The shop's own logo.** Set in **Settings → Shop logo** (or on the first
   screen of the setup wizard), and it then appears on the sign-in screen, in
   the sidebar corner, as the browser tab's icon, and at the top of every

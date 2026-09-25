@@ -160,6 +160,11 @@ suggested shelf price. Tick the ones you want, or leave prices alone.
 To see what is on the shelf and at what price: open the product →
 **💰 Wholesale → What this stock cost you**.
 
+**Paying for it.** Cash to the driver → **Caisse → − Sortir des espèces →
+Fournisseur / réassort payé en espèces**. Settling an account → **Fournisseurs
+→ 💵 Pay**, choosing how you paid. Either way it is recorded with a date, and
+it does **not** come off your profit — see section 10.
+
 ---
 
 ## 7. Staff accounts
@@ -208,7 +213,49 @@ can change that. Sales and cash movements are recorded either way.
 
 ---
 
-## 10. Putting your logo on the app and your receipts
+## 10. Reading your profit  💰
+
+Your profit is worked out like this:
+
+```
+        what you sold                    (Revenue)
+   −    what those goods cost you        (Cost of goods)
+   =    gross profit
+   −    rent, electricity, salaries…     (Expenses)
+   −    damaged / expired / stolen stock (Stock losses)
+   =    NET PROFIT
+```
+
+**Money you pay a supplier is not an expense.** It does not disappear — it
+turns your cash into goods sitting on your shelf, still worth what you paid.
+It reaches your profit later, once, as the *cost of goods*, on the day each
+item is sold.
+
+So when a delivery arrives, your profit should **not** drop. Your cash drops
+and your stock rises. That is why the dashboard shows **Stock bought** in its
+own column, after the profit, instead of inside it.
+
+**How to record a delivery:**
+
+- Paid the driver in cash → **Caisse → − Sortir des espèces → Fournisseur /
+  réassort payé en espèces**.
+- Paying an account later → **Fournisseurs → 💵 Pay**, and choose how you paid.
+
+Do **not** enter it in **Dépenses**. That screen is for running costs only.
+
+**If your profit looks wrong, check two things:**
+
+1. **Products with no cost price.** If you typed a selling price but left the
+   cost empty, every sale of that item is counted as 100% profit. Go to
+   **Utilisateurs → Backup & Data → 🩺 Data health → Run check** — it lists
+   every product missing a cost. Fill them in under **Produits**.
+2. **Old "Réassort" expenses.** If you used to record deliveries as expenses,
+   they are still listed at the bottom of the **Dépenses** screen in their own
+   block. They are no longer taken off your profit. Delete them if you like.
+
+---
+
+## 11. Putting your logo on the app and your receipts
 
 Go to **Settings → 🏪 Shop logo → Choose a picture…** and pick your logo from
 the computer. It appears straight away:
@@ -229,7 +276,7 @@ receipts and reports** to *Do not print it*. It stays on screen.
 
 ---
 
-## 11. Working in French
+## 12. Working in French
 
 Press **FR** in the top bar. Everything changes — menus, buttons, messages,
 tables, and the tickets and Z-report you print. Switch back with **EN** at any
@@ -237,7 +284,7 @@ time; it only changes what you see, never your data.
 
 ---
 
-## 12. Scanner typing strange symbols?
+## 13. Scanner typing strange symbols?
 
 If a scan comes out as `-&&&ààààà&ààà` instead of numbers, the scanner is
 typing on a US keyboard while the computer is set to French or Arabic. **The
@@ -251,7 +298,7 @@ and what the app read, so you can check in five seconds.
 
 ---
 
-## 13. Need a reminder?
+## 14. Need a reminder?
 
 Press the **❓** button at the top of the screen at any time — shortcuts and
 short how-tos are built in.
