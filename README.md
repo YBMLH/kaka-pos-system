@@ -80,6 +80,7 @@ loads it back on any machine.
 | **People** | Suppliers with balances and payments; customers with credit, purchase history and loyalty points. |
 | **Money** | Expenses, cash register open/close with counting, cash in/out of the drawer (owner withdrawals, suppliers paid at the door, till expenses), Z-report day-end close, Zakat calculator. |
 | **Reports** | Sales, inventory, financial (incl. stock losses), supplier, customer and employee reports with CSV export. |
+| **Branding** | The shop's own logo on the sign-in screen, in the sidebar corner, on the browser tab and at the top of every printed receipt, purchase order, Z-report and Zakat report. |
 | **Admin** | Four roles with enforced permissions, audit log, backup/restore, store settings. |
 
 ### Details worth knowing
@@ -101,6 +102,21 @@ loads it back on any machine.
   size (e.g. 40 per box), a separate carton barcode and a case price. Scanning the carton sells a whole
   case; stock is still counted in pieces. Purchase orders can be placed by case
   and receiving converts to pieces, storing cost per piece.
+- **The shop's own logo.** Set in **Settings → Shop logo** (or on the first
+  screen of the setup wizard), and it then appears on the sign-in screen, in
+  the sidebar corner, as the browser tab's icon, and at the top of every
+  receipt, purchase order, Z-report and Zakat report — sized in millimetres so
+  it comes out the same on a 58 mm roll, an 80 mm roll and on A4. **Settings →
+  Logo on printed receipts and reports** turns the printed half off on its own
+  when ink matters more than letterhead.
+  The picture lives inside the shop's data as a `data:` URI, because the app is
+  one file with no server and no folder of assets beside it. That makes its
+  size the app's problem, so the picture is redrawn at most 420 px on its
+  longest side before it is stored: a PNG while that fits in 180 KB (which
+  keeps a see-through background), otherwise a JPEG on white, shrinking in
+  steps until it does. A 4 MB photograph lands at about 76 KB; anything over
+  10 MB is refused outright. If the browser will not hold the result, the
+  previous logo is put back rather than leaving the shop with no data.
 - **Weighed items.** Deli and produce scale labels (in-store EAN-13 embedding
   price or weight) resolve by PLU and add the exact weight and price.
 - **Expiry / FEFO.** Batches carry their own expiry; sales always take the
