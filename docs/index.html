@@ -2200,19 +2200,20 @@ function salesMetrics(filterFn){var m={orders:0,revenue:0,cost:0,gross_profit:0,
 function expenseTotal(filterFn){var t=0;DB.data.expenses.forEach(function(e){
   if(isStockSpend(e))return;
   if(filterFn&&!filterFn(e))return;t+=e.amount;});return Math.round(t*100)/100;}
-/* What the shop laid out on stock — real money, shown on its own rather than
-   hidden, but never subtracted from profit. */
-function stockSpendTotal(filterFn){var t=0;DB.data.expenses.forEach(function(e){
-  if(!isStockSpend(e))return;
-  if(filterFn&&!filterFn(e))return;t+=e.amount;});return Math.round(t*100)/100;}
 /* Every route the money can take out to a supplier, added up once each, so the
    dashboard, the reports and the Z-report all quote the same figure.
-   Payments made from the till are already in the cash ledger and are counted
-   from there, not twice. `inDate` takes a date and says whether it counts. */
+   The three routes are: a stock-spend expense typed in by hand; a supplier
+   cash move out of the till; and a supplier payment settled by transfer or
+   cheque. An old version paid a supplier from the till by writing BOTH an
+   expense AND a cash move for the same money — so a stock expense that came
+   from the drawer is skipped here, because its cash move already stands for
+   it, and counting both would show the delivery at twice its price.
+   `inDate` takes a date and says whether it counts. */
 function stockBoughtTotal(inDate){
   function ok(d){return !inDate||inDate(d);}
   var t=0;
-  DB.data.expenses.forEach(function(e){if(isStockSpend(e)&&ok(e.spent_on))t+=e.amount||0;});
+  DB.data.expenses.forEach(function(e){
+    if(isStockSpend(e)&&!e.from_drawer&&ok(e.spent_on))t+=e.amount||0;});
   cashMoves(function(m){return m.reason==="supplier"&&ok(m.created_at);})
     .forEach(function(m){t+=m.amount||0;});
   (DB.data.supplier_payments||[]).forEach(function(p){
