@@ -167,7 +167,30 @@ it does **not** come off your profit — see section 10.
 
 ---
 
-## 7. Staff accounts
+## 7. Selling on credit (الكريدي)
+
+Regulars often take goods now and pay later. At payment, choose **Credit** as
+the method and pick the customer (add them first under **Clients** if they are
+new). The sale is booked straight away — your stock, revenue and profit are all
+counted now — and the amount is added to what that customer owes you.
+
+**Seeing who owes you:** open **Clients**. The top shows **Dû au magasin** (the
+total owed to you across everyone) and **Encaissé ce mois-ci** (credit paid
+back this month). Tick **Seulement ceux qui me doivent** to see just the people
+who owe, biggest first.
+
+**When they pay you back:** find the customer, press **💵** (Régler), type the
+amount and how they paid. If it is cash, it goes **into the till** and is
+counted at closing, so your drawer still balances at the end of the day. Every
+repayment is saved with a date, in the **Remboursements de crédit** list.
+
+> A repayment is **not** a new sale. It does not add to your revenue or profit —
+> that was already counted the day the goods left the shop. Paying back a credit
+> just turns what you are owed back into cash.
+
+---
+
+## 8. Staff accounts
 
 **Users → + Add** creates an account for each person. Give cashiers the
 **Cashier** role — they can sell and take payments, but cannot see your profit,
@@ -177,7 +200,7 @@ Never share the admin password with staff.
 
 ---
 
-## 8. If something goes wrong
+## 9. If something goes wrong
 
 The app is built to survive a bad day.
 
@@ -195,7 +218,7 @@ The app is built to survive a bad day.
 
 ---
 
-## 9. The cash drawer
+## 10. The cash drawer
 
 The flat cable coming out of the drawer looks like a network cable, but it is
 not one — it never goes into the computer. Something has to send it a pulse:
@@ -213,7 +236,7 @@ can change that. Sales and cash movements are recorded either way.
 
 ---
 
-## 10. Reading your profit  💰
+## 11. Reading your profit  💰
 
 Your profit is worked out like this:
 
@@ -255,7 +278,7 @@ Do **not** enter it in **Dépenses**. That screen is for running costs only.
 
 ---
 
-## 11. Putting your logo on the app and your receipts
+## 12. Putting your logo on the app and your receipts
 
 Go to **Settings → 🏪 Shop logo → Choose a picture…** and pick your logo from
 the computer. It appears straight away:
@@ -276,7 +299,7 @@ receipts and reports** to *Do not print it*. It stays on screen.
 
 ---
 
-## 12. Working in French
+## 13. Working in French
 
 Press **FR** in the top bar. Everything changes — menus, buttons, messages,
 tables, and the tickets and Z-report you print. Switch back with **EN** at any
@@ -284,7 +307,7 @@ time; it only changes what you see, never your data.
 
 ---
 
-## 13. Scanner typing strange symbols?
+## 14. Scanner typing strange symbols?
 
 If a scan comes out as `-&&&ààààà&ààà` instead of numbers, the scanner is
 typing on a US keyboard while the computer is set to French or Arabic. **The
@@ -298,7 +321,7 @@ and what the app read, so you can check in five seconds.
 
 ---
 
-## 14. Need a reminder?
+## 15. Need a reminder?
 
 Press the **❓** button at the top of the screen at any time — shortcuts and
 short how-tos are built in.

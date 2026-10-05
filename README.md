@@ -77,7 +77,7 @@ loads it back on any machine.
 | **Products** | Full CRUD including permanent delete for something typed in wrong (archive keeps the history; delete removes the product and its movements while past sales keep their own copy of the name and price), scan-to-add, emoji or photo images, categories, cases, wholesale tiers, batches & expiry, barcode labels, CSV import/export. |
 | **Inventory** | Real-time stock, alerts, expiry watch (FEFO), write-offs valued at cost, movement ledger, stocktake with variance. |
 | **Purchasing** | Purchase orders by piece or case, **printable on A4** for the supplier, partial receiving, automatic reordering by supplier, returns to supplier. |
-| **People** | Suppliers with balances and payments; customers with credit, purchase history and loyalty points. |
+| **People** | Suppliers with balances and dated payments; customers with store credit (الكريدي) — a "who owes you" overview, recorded repayments that land in the till, purchase history and loyalty points. |
 | **Money** | Running-cost expenses (stock purchases deliberately excluded — see below), cash register open/close with counting, cash in/out of the drawer (owner withdrawals, suppliers paid at the door, till expenses), dated supplier payments by method, Z-report day-end close, Zakat calculator. |
 | **Reports** | Sales, inventory, financial (incl. stock losses), supplier, customer and employee reports with CSV export. |
 | **Branding** | The shop's own logo on the sign-in screen, in the sidebar corner, on the browser tab and at the top of every printed receipt, purchase order, Z-report and Zakat report. |
@@ -124,6 +124,18 @@ loads it back on any machine.
   prices an average is wrong, and since a return hands back the oldest and
   usually cheapest layer first, the error always ran the same way and quietly
   added profit the shop never made.
+- **Customer credit (الكريدي).** A neighbourhood shop sells on the book, so
+  money owed *to* the shop is made as clear as money the shop owes out. The
+  Customers screen shows the total owed, a "who owes me" filter, and each
+  debtor's balance. When a customer pays their credit back, it is **not** a new
+  sale and does not touch revenue or profit — the sale was booked when the
+  credit was given; the repayment only turns a receivable back into cash. Paid
+  in cash it is recorded as money **into the till**, so the end-of-day count
+  reconciles instead of showing an unexplained surplus, and every repayment is
+  dated and listed by method. A supplier payment and a customer repayment are
+  each half of a larger record, so the cash-register screen points to the
+  Suppliers / Customers screen to correct one rather than letting the drawer
+  side be undone on its own.
 - **Products with no cost price.** Nothing on a shelf is free, so a product
   saved with a selling price and no cost is warned about once at the moment it
   can still be typed in, and listed by **Business Health** afterwards. Until
