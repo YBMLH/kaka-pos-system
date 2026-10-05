@@ -1056,9 +1056,10 @@ function healthCheck(){
     if(Math.abs(sum-(p.quantity||0))>0.01)
       issues.push({type:"ledger",id:p.id,name:p.name_en||p.name_ar,
         detail:"stock "+num(p.quantity,2)+" but movements total "+num(sum,2),
-        fix:function(){adjustStock(p.id,(p.quantity||0)-sum===0?0:0,"adjustment","");
-          /* Trust the on-hand figure and add a balancing entry. */
-          var diff=(p.quantity||0)-sum;
+        /* Trust the on-hand figure and add a single balancing entry so the
+           ledger adds up to it. */
+        fix:function(){
+          var diff=round2((p.quantity||0)-sum);
           if(diff!==0){d.movements.unshift({id:DB.nextId("movements"),product_id:p.id,
             product_name:p.name_en,change_qty:diff,balance:p.quantity,reason:"adjustment",
             note:"Ledger correction",loss_value:0,user:"system",created_at:new Date().toISOString()});}}});
